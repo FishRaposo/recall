@@ -502,8 +502,10 @@ class Game {
     else {
       ui.drawHud(ctx, this);
       ui.drawWaveBanner(ctx, this);
-      ui.drawHint(ctx, this);
-      if (this.state === 'playing') ui.drawReticle(ctx, this);
+      if (this.state === 'playing') {
+        ui.drawHint(ctx, this);
+        ui.drawReticle(ctx, this);
+      }
       if (this.state === 'paused') ui.drawPause(ctx);
       if (this.state === 'over') ui.drawGameOver(ctx, this);
     }

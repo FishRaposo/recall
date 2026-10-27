@@ -128,9 +128,9 @@ export function drawTitle(ctx, g) {
   const rows = [
     ['move', 'WASD  ·  arrows  ·  left stick'],
     ['aim', 'mouse  ·  right stick'],
-    ['throw / recall', 'click  ·  space  ·  A'],
-    ['dash', 'right-click  ·  shift  ·  B'],
-    ['pause  ·  mute', 'esc  ·  M'],
+    ['throw / recall', 'click  ·  Z  ·  space  ·  pad A'],
+    ['dash', 'right-click  ·  shift  ·  X  ·  pad B'],
+    ['pause  ·  mute  ·  fullscreen', 'esc  ·  M  ·  F'],
   ];
   rows.forEach(([k, v], i) => {
     const y = 318 + i * 24;
