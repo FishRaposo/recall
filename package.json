@@ -1,0 +1,16 @@
+{
+  "name": "recall",
+  "version": "1.0.0",
+  "description": "A small arcade game about one blade that always comes back.",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "start": "npx --yes serve -l 8080 .",
+    "test": "node --test",
+    "check": "node scripts/check.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
