@@ -1,0 +1,50 @@
+diff --git a/src/blade.js b/src/blade.js
+index 7db0713..c9340d1 100644
+--- a/src/blade.js
++++ b/src/blade.js
+@@ -20,6 +20,7 @@ export class Blade {
+     this.flightHits = 0;
+     this.hitSet = new Set(); // each enemy can be struck once per leg (out, then again on return)
+     this.hadTargets = false;
++    this.banked = false; // has this throw bounced off a wall yet?
+     this.trail = [];
+   }
+ 
+@@ -96,6 +97,7 @@ export class Blade {
+     this.x = p.x + p.faceX * (p.r + 4);
+     this.y = p.y + p.faceY * (p.r + 4);
+     this.flightHits = 0;
++    this.banked = false;
+     this.hitSet.clear();
+     this.trail.length = 0;
+     this.hadTargets = g.hasTargets();
+@@ -121,6 +123,7 @@ export class Blade {
+     if (this.y < a.y + this.r) { this.y = a.y + this.r; this.vy = Math.abs(this.vy); hit = true; }
+     if (this.y > a.y + a.h - this.r) { this.y = a.y + a.h - this.r; this.vy = -Math.abs(this.vy); hit = true; }
+     if (hit) {
++      this.banked = true;
+       this.speed *= BLADE.bounce;
+       g.onBladeBounce(this);
+     }
+diff --git a/src/main.js b/src/main.js
+index 7b9bcd8..1b6b580 100644
+--- a/src/main.js
++++ b/src/main.js
+@@ -204,9 +204,15 @@ class Game {
+ 
+   kill(e, dx, dy) {
+     this.stats.kills += 1;
+-    const pts = e.points * this.mult;
++    // Bank shot: a kill made after the blade has come off a wall this throw scores double.
++    const bank = this.blade.banked;
++    const pts = e.points * this.mult * (bank ? 2 : 1);
+     this.score += pts;
+-    this.floaters.add(e.x, e.y - e.r, `${pts}`, { size: 13 + Math.min(this.mult, 8) });
++    this.floaters.add(e.x, e.y - e.r, `${pts}`, { size: 13 + Math.min(this.mult, 8), color: bank ? COLORS.red : COLORS.ink });
++    if (bank) {
++      this.floaters.add(e.x, e.y - e.r - 18, 'bank shot', { size: 12, color: COLORS.red, life: 0.9 });
++      this.sfx.bounce();
++    }
+     this.ink.blot(e.x, e.y, e.r * 1.25, COLORS.ink, dx, dy);
+     this.sfx.kill();
+   }

@@ -16,6 +16,10 @@ npm start            # serves the folder at http://localhost:8080
 
 Any static server works (`python -m http.server` too). Opening `index.html` straight from disk won't, because browsers block ES modules on `file://`.
 
+## Task pack
+
+[`tasks/`](tasks/README.md) holds six game-development tasks built on this game: four realistic bugs planted in working code and two feature requests. Each has a brief written the way it would arrive (player report, QA ticket, design review, producer request), acceptance criteria with an input sequence, the expected visual outcome and verifiable game state, a reference solution with root-cause notes, and an automated check. `npm run tasks` proves every check fails on the starting state and passes on the reference solution.
+
 ## Controls
 
 | | Mouse + keyboard | Keyboard only | Gamepad |
@@ -61,7 +65,9 @@ src/audio.js      synthesized sound effects
 src/input.js      keyboard, mouse and gamepad behind one interface
 src/ui.js         HUD, title, pause and game-over screens
 src/config.js     every tunable number in one place
+src/harness.js    deterministic test harness (?harness): scripted input, fixed-step frames
 test/             node:test suites
+tasks/            the task pack and its verifier
 ```
 
 ## Tests
@@ -69,7 +75,10 @@ test/             node:test suites
 ```bash
 npm test         # 18 tests: blade homing at 30/60/144 fps, wave budgets, collision, RNG
 npm run check    # syntax check of every module
+npm run tasks    # the task pack: every check fails on its starting state, passes on its solution
 ```
+
+`?harness` freezes the game's clock and exposes `window.__recall.test`, so a check can place the player, spawn enemies, script input and step frames at a fixed 1/60 s against the real game in a real browser. See [src/harness.js](src/harness.js).
 
 The browser-side modules were also exercised by scripted headless play-throughs (one with player damage switched off, reaching wave 7) with no console errors.
 

@@ -8,7 +8,8 @@
   "scripts": {
     "start": "npx --yes serve -l 8080 .",
     "test": "node --test",
-    "check": "node scripts/check.mjs"
+    "check": "node scripts/check.mjs",
+    "tasks": "node tasks/verify.mjs"
   },
   "engines": {
     "node": ">=20"

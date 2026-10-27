@@ -1,0 +1,12 @@
+diff --git a/src/blade.js b/src/blade.js
+index 7db0713..d52976e 100644
+--- a/src/blade.js
++++ b/src/blade.js
+@@ -104,7 +104,6 @@ export class Blade {
+ 
+   turnHome(g, early) {
+     this.state = 'return';
+-    this.hitSet.clear();
+     if (early) g.onRecall(this);
+   }
+ 

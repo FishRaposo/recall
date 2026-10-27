@@ -1,0 +1,13 @@
+diff --git b/src/input.js a/src/input.js
+index 389109c..755b60b 100644
+--- b/src/input.js
++++ a/src/input.js
+@@ -155,8 +155,5 @@ export class Input {
+ 
+   endFrame() {
+     this.pressed.clear();
+-    // A press belongs to the frame it happened in; don't let it leak into later frames.
+-    this.buffers.throw = 0;
+-    this.buffers.dash = 0;
+   }
+ }

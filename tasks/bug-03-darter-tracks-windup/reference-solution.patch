@@ -1,0 +1,12 @@
+diff --git b/src/enemies.js a/src/enemies.js
+index ef7accf..fe52905 100644
+--- b/src/enemies.js
++++ a/src/enemies.js
+@@ -196,7 +196,6 @@ export class Darter extends Enemy {
+         }
+         break;
+       case 'wind':
+-        [this.ax, this.ay] = norm(p.x - this.x, p.y - this.y); // keep the telegraph on the player
+         this.vx = expDecay(this.vx, 0, 10, dt);
+         this.vy = expDecay(this.vy, 0, 10, dt);
+         if (this.stateT <= 0) {
