@@ -6,6 +6,8 @@ A small arcade game about one blade that always comes back.
 
 You have one throwing blade. Throw it, call it back early if you need to, and catch it: every catch after a hit raises your score multiplier, and every empty catch while enemies are on the board drops it. Everything you kill leaves ink on the floor, so each run ends as a painting you can save.
 
+**Project page:** [fishraposo.github.io/projects/recall.html](https://fishraposo.github.io/projects/recall.html)
+
 **Play:** in the browser on itch.io *(link added after upload)*, or run it locally:
 
 ```bash
