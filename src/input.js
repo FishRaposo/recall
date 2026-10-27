@@ -23,6 +23,9 @@ export class Input {
     this.aimSource = 'mouse';
     this.pad = null;
     this.padPrev = [];
+    this.mouseDown = [false, false, false];
+    // Test harness override: { move: [x, y], aim: [x, y], held: { throw, dash } }. Null in normal play.
+    this.script = null;
 
     addEventListener('keydown', (e) => {
       if (BLOCK_DEFAULT.has(e.code)) e.preventDefault();
@@ -45,6 +48,7 @@ export class Input {
     canvas.addEventListener('mousedown', (e) => {
       canvas.focus();
       [this.mouse.x, this.mouse.y] = this.toWorld(e.clientX, e.clientY);
+      this.mouseDown[e.button] = true;
       if (e.button === 0) {
         this.pressed.add('Mouse0');
         this.buffers.throw = INPUT_BUFFER;
@@ -53,6 +57,7 @@ export class Input {
         this.buffers.dash = INPUT_BUFFER;
       }
     });
+    addEventListener('mouseup', (e) => (this.mouseDown[e.button] = false));
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
   }
 
@@ -87,6 +92,7 @@ export class Input {
   }
 
   moveVector() {
+    if (this.script) return this.script.move;
     const d = this.down;
     let x = 0;
     let y = 0;
@@ -104,12 +110,26 @@ export class Input {
 
   // Unit aim vector from (px,py). Falls back to the given direction (last movement).
   aimDir(px, py, fx, fy) {
+    if (this.script) {
+      const v = norm(this.script.aim[0], this.script.aim[1]);
+      return v[0] || v[1] ? v : [fx, fy];
+    }
     if (this.aimSource === 'pad' && this.pad && (this.pad.rx || this.pad.ry)) return norm(this.pad.rx, this.pad.ry);
     if (this.aimSource === 'mouse') {
       const v = norm(this.mouse.x - px, this.mouse.y - py);
       if (v[0] || v[1]) return v;
     }
     return [fx, fy];
+  }
+
+  // Is the action's button physically down right now (as opposed to pressed this frame)?
+  held(action) {
+    if (this.script) return !!this.script.held?.[action];
+    const keys = action === 'throw' ? THROW_KEYS : DASH_KEYS;
+    for (const k of keys) if (this.down.has(k)) return true;
+    if (this.mouseDown[action === 'throw' ? 0 : 2]) return true;
+    const b = this.padPrev;
+    return action === 'throw' ? !!(b[0] || b[5] || b[7]) : !!(b[1] || b[4] || b[6]);
   }
 
   consume(action) {

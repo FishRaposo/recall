@@ -9,10 +9,12 @@ import { createEnemy, enemyRadius } from './enemies.js';
 import { waveRoster, spawnGroups, UNLOCK_WAVE, DEBUT_NOTE } from './waves.js';
 import { loadBest, saveBest } from './storage.js';
 import * as ui from './ui.js';
+import { attachHarness } from './harness.js';
 
 const params = new URLSearchParams(location.search);
 const FIXED_SEED = params.has('seed') ? Number(params.get('seed')) >>> 0 : null;
 const DEBUG = params.has('debug');
+const HARNESS = params.has('harness'); // tests drive the clock and the input; see src/harness.js
 
 class Game {
   constructor(canvas) {
@@ -34,6 +36,8 @@ class Game {
     this.clock = 0;
     this.flash = 0;
     this.fps = 60;
+    this.waveLock = false;
+    this.harness = HARNESS;
     this.paintTitle();
 
     this.resize();
@@ -58,8 +62,8 @@ class Game {
 
   // ---------------------------------------------------------------- run lifecycle
 
-  newRun() {
-    const seed = FIXED_SEED ?? ((Date.now() ^ 0x9e3779b9) >>> 0);
+  newRun(seedOverride) {
+    const seed = seedOverride ?? FIXED_SEED ?? ((Date.now() ^ 0x9e3779b9) >>> 0);
     this.rng = new Rng(seed);
     this.player = new Player(ARENA.x + ARENA.w / 2, ARENA.y + ARENA.h / 2);
     this.blade = new Blade(this.player);
@@ -131,7 +135,7 @@ class Game {
   }
 
   pause() {
-    if (this.state === 'playing') this.state = 'paused';
+    if (this.state === 'playing' && !this.harness) this.state = 'paused';
   }
 
   // ---------------------------------------------------------------- events (called by entities)
@@ -289,7 +293,7 @@ class Game {
         }
         this.sfx.spawn();
       }
-      if (!this.groups.length && !this.enemies.length && this.state === 'playing') this.waveCleared();
+      if (!this.groups.length && !this.enemies.length && this.state === 'playing' && !this.waveLock) this.waveCleared();
     } else if (this.waveState === 'clear') {
       this.waveT -= dt;
       if (this.waveT <= 0 && this.state === 'playing') this.startWave(this.wave + 1);
@@ -367,6 +371,13 @@ class Game {
     const realDt = Math.min((now - this.last) / 1000, 1 / 20);
     this.last = now;
     this.fps += (1 / Math.max(realDt, 1e-3) - this.fps) * 0.05;
+    if (!this.harness) this.tick(realDt); // under the harness, time only moves when a test steps it
+    this.render();
+    requestAnimationFrame((t) => this.frame(t));
+  }
+
+  // One frame of game time: input, menus, simulation (or hitstop), camera.
+  tick(realDt) {
     this.input.poll(realDt);
     this.handleMeta();
 
@@ -383,10 +394,7 @@ class Game {
     }
     this.shake.update(realDt);
     this.flash = Math.max(0, this.flash - realDt * 4);
-
-    this.render();
     this.input.endFrame();
-    requestAnimationFrame((t) => this.frame(t));
   }
 
   handleMeta() {
@@ -575,4 +583,6 @@ class Game {
 }
 
 const canvas = document.getElementById('game');
-window.__recall = new Game(canvas); // exposed for the smoke test and for poking at in the console
+const game = new Game(canvas);
+window.__recall = game; // exposed for the smoke test and for poking at in the console
+if (HARNESS) game.test = attachHarness(game);
