@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { segCircleHit, circleHit, norm, expDecay, Rng } from '../src/util.js';
+import { segCircleHit, circleHit, norm, expDecay, Rng } from '../src/core/util.ts';
 
 test('swept hit catches a fast pass straight through a small circle', () => {
   // Endpoints are both far outside the circle; only the segment crosses it.

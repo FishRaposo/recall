@@ -2,9 +2,10 @@
 //
 // For each task:
 //   1. copy the game into a temp folder and apply starting-state.patch (if any) → the task as handed out
-//   2. run the task's check in headless Chromium                              → must FAIL
-//   3. apply reference-solution.patch                                         → the solved task
-//   4. run the check again                                                    → must PASS
+//   2. compile the TypeScript source                                        → the built game
+//   3. run the task's check in headless Chromium                            → must FAIL
+//   4. apply reference-solution.patch                                       → the solved task
+//   5. compile and run the check again                                      → must PASS
 //
 // A check that passes on the starting state proves nothing, so FAIL→PASS is the only green result.
 //
@@ -22,6 +23,7 @@ import { chromium } from 'playwright-core';
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const TASKS = join(ROOT, 'tasks');
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png' };
+const TSC = join(ROOT, 'node_modules/typescript/bin/tsc');
 
 function serve(dir) {
   const server = createServer((req, res) => {
@@ -38,6 +40,11 @@ function serve(dir) {
 
 function applyPatch(dir, patch) {
   execFileSync('git', ['apply', '--whitespace=nowarn', patch], { cwd: dir, stdio: 'pipe' });
+}
+
+function build(dir) {
+  execFileSync(process.execPath, [TSC, '-p', 'tsconfig.json'], { cwd: dir, stdio: 'pipe' });
+  cpSync(join(dir, 'styles.css'), join(dir, 'dist/styles.css'));
 }
 
 async function runCheck(browser, dir, checkFile) {
@@ -72,18 +79,24 @@ for (const id of ids) {
   const meta = JSON.parse(readFileSync(join(t, 'task.json'), 'utf8'));
   const work = mkdtempSync(join(tmpdir(), `recall-${id}-`));
   cpSync(join(ROOT, 'index.html'), join(work, 'index.html'));
+  cpSync(join(ROOT, 'styles.css'), join(work, 'styles.css'));
+  cpSync(join(ROOT, 'package.json'), join(work, 'package.json'));
+  cpSync(join(ROOT, 'tsconfig.json'), join(work, 'tsconfig.json'));
   cpSync(join(ROOT, 'src'), join(work, 'src'), { recursive: true });
 
   let before;
   let after;
   try {
     if (existsSync(join(t, 'starting-state.patch'))) applyPatch(work, join(t, 'starting-state.patch'));
+    build(work);
     before = await runCheck(browser, work, join(t, 'check.mjs'));
     applyPatch(work, join(t, 'reference-solution.patch'));
+    build(work);
     after = await runCheck(browser, work, join(t, 'check.mjs'));
   } catch (e) {
-    before ??= { pass: true, details: `patch failed: ${e.stderr || e.message}` };
-    after ??= { pass: false, details: `patch failed: ${e.stderr || e.message}` };
+    const detail = e.stderr ? String(e.stderr) : e.message;
+    before ??= { pass: true, details: `patch/build failed: ${detail.split('\n')[0]}` };
+    after ??= { pass: false, details: `patch/build failed: ${detail.split('\n')[0]}` };
   }
   rmSync(work, { recursive: true, force: true });
 

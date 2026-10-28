@@ -1,12 +1,13 @@
-diff --git a/src/blade.js b/src/blade.js
-index 7db0713..d52976e 100644
---- a/src/blade.js
-+++ b/src/blade.js
-@@ -104,7 +104,6 @@ export class Blade {
+diff --git a/src/core/blade.ts b/src/core/blade.ts
+index bfbb82e..6635b8c 100644
+--- a/src/core/blade.ts
++++ b/src/core/blade.ts
+@@ -111,7 +111,6 @@ export class Blade implements BladeLike {
  
-   turnHome(g, early) {
+   turnHome(g: BladeWorld, early: boolean): void {
      this.state = 'return';
 -    this.hitSet.clear();
      if (early) g.onRecall(this);
    }
  
+

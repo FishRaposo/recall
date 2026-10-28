@@ -1,33 +1,39 @@
-import { BLADE, ARENA, COLORS } from './config.js';
-import { norm, expDecay } from './util.js';
+import { BLADE, ARENA, COLORS } from './config.ts';
+import { norm, expDecay } from './util.ts';
+import type { BladeLike, BladeWorld, EnemyLike, PlayerLike } from './types.ts';
 
 // The blade has three states:
 //   held   → rides beside the player, pointing at the aim
 //   out    → flies along the throw, decelerating and bouncing off walls
 //   return → accelerates back, curving toward wherever the player is now
 // Pressing throw while it's out recalls it early. Catching it is what builds the multiplier.
-export class Blade {
-  constructor(player) {
+export class Blade implements BladeLike {
+  p: PlayerLike;
+  state: 'held' | 'out' | 'return' = 'held';
+  x: number;
+  y: number;
+  vx = 0;
+  vy = 0;
+  speed = 0;
+  angle = 0;
+  r = BLADE.r;
+  flightHits = 0;
+  hitSet = new Set<EnemyLike>(); // each enemy can be struck once per leg (out, then again on return)
+  hadTargets = false;
+  trail: number[] = [];
+  banked = false;
+
+  constructor(player: PlayerLike) {
     this.p = player;
-    this.state = 'held';
     this.x = player.x;
     this.y = player.y;
-    this.vx = 0;
-    this.vy = 0;
-    this.speed = 0;
-    this.angle = 0;
-    this.r = BLADE.r;
-    this.flightHits = 0;
-    this.hitSet = new Set(); // each enemy can be struck once per leg (out, then again on return)
-    this.hadTargets = false;
-    this.trail = [];
   }
 
-  get flying() {
+  get flying(): boolean {
     return this.state !== 'held';
   }
 
-  update(dt, g) {
+  update(dt: number, g: BladeWorld): void {
     const p = this.p;
 
     if (this.state === 'held') {
@@ -87,7 +93,7 @@ export class Blade {
     if (this.state === 'return' && p.alive && d < p.r + this.r + BLADE.catchPad) this.catch(g);
   }
 
-  throw(g) {
+  throw(g: BladeWorld): void {
     const p = this.p;
     this.state = 'out';
     this.speed = BLADE.throwSpeed;
@@ -98,22 +104,23 @@ export class Blade {
     this.flightHits = 0;
     this.hitSet.clear();
     this.trail.length = 0;
+    this.banked = false;
     this.hadTargets = g.hasTargets();
     g.onThrow(this);
   }
 
-  turnHome(g, early) {
+  turnHome(g: BladeWorld, early: boolean): void {
     this.state = 'return';
     this.hitSet.clear();
     if (early) g.onRecall(this);
   }
 
   // Called when the blade strikes something heavy on the way out.
-  drag() {
+  drag(): void {
     if (this.state === 'out') this.speed = Math.max(BLADE.minSpeed + 1, this.speed * BLADE.heavyDrag);
   }
 
-  bounce(g) {
+  bounce(g: BladeWorld): void {
     const a = ARENA;
     let hit = false;
     if (this.x < a.x + this.r) { this.x = a.x + this.r; this.vx = Math.abs(this.vx); hit = true; }
@@ -122,17 +129,18 @@ export class Blade {
     if (this.y > a.y + a.h - this.r) { this.y = a.y + a.h - this.r; this.vy = -Math.abs(this.vy); hit = true; }
     if (hit) {
       this.speed *= BLADE.bounce;
+      this.banked = true;
       g.onBladeBounce(this);
     }
   }
 
-  keepInside() {
+  keepInside(): void {
     const a = ARENA;
     this.x = Math.min(Math.max(this.x, a.x + this.r), a.x + a.w - this.r);
     this.y = Math.min(Math.max(this.y, a.y + this.r), a.y + a.h - this.r);
   }
 
-  catch(g) {
+  private catch(g: BladeWorld): void {
     const hits = this.flightHits;
     const hadTargets = this.hadTargets;
     this.state = 'held';
@@ -142,7 +150,7 @@ export class Blade {
     g.onCatch(hits, hadTargets);
   }
 
-  draw(ctx) {
+  draw(ctx: CanvasRenderingContext2D): void {
     const t = this.trail;
     const n = t.length / 2;
     ctx.lineCap = 'round';

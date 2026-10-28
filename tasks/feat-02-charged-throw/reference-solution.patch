@@ -1,87 +1,10 @@
-diff --git a/src/blade.js b/src/blade.js
-index 7db0713..f81c89a 100644
---- a/src/blade.js
-+++ b/src/blade.js
-@@ -1,4 +1,4 @@
--import { BLADE, ARENA, COLORS } from './config.js';
-+import { BLADE, ARENA, COLORS, CHARGE } from './config.js';
- import { norm, expDecay } from './util.js';
- 
- // The blade has three states:
-@@ -20,6 +20,9 @@ export class Blade {
-     this.flightHits = 0;
-     this.hitSet = new Set(); // each enemy can be struck once per leg (out, then again on return)
-     this.hadTargets = false;
-+    this.charging = false;
-+    this.charge = 0; // seconds held
-+    this.charged = false; // is the current throw a charged one?
-     this.trail = [];
-   }
- 
-@@ -37,7 +40,22 @@ export class Blade {
-       this.y = expDecay(this.y, ty, 30, dt);
-       this.angle = Math.atan2(p.faceY, p.faceX);
-       if (this.trail.length) this.trail.shift();
--      if (p.alive && g.input.consume('throw')) this.throw(g);
-+      if (!p.alive) {
-+        this.charging = false;
-+      } else if (this.charging) {
-+        // The throw happens on release; how long the button was held decides which throw.
-+        if (g.input.held('throw')) {
-+          const before = this.charge;
-+          this.charge = Math.min(this.charge + dt, CHARGE.full);
-+          if (before < CHARGE.full && this.charge >= CHARGE.full) g.onChargeFull(this);
-+        } else {
-+          this.charging = false;
-+          this.throw(g, this.charge >= CHARGE.full);
-+        }
-+      } else if (g.input.consume('throw')) {
-+        this.charging = true;
-+        this.charge = 0;
-+      }
-       return;
-     }
- 
-@@ -87,10 +105,12 @@ export class Blade {
-     if (this.state === 'return' && p.alive && d < p.r + this.r + BLADE.catchPad) this.catch(g);
-   }
- 
--  throw(g) {
-+  throw(g, charged = false) {
-     const p = this.p;
-     this.state = 'out';
--    this.speed = BLADE.throwSpeed;
-+    this.charged = charged;
-+    this.charge = 0;
-+    this.speed = BLADE.throwSpeed * (charged ? CHARGE.speedScale : 1);
-     this.vx = p.faceX * this.speed;
-     this.vy = p.faceY * this.speed;
-     this.x = p.x + p.faceX * (p.r + 4);
-@@ -110,7 +130,7 @@ export class Blade {
- 
-   // Called when the blade strikes something heavy on the way out.
-   drag() {
--    if (this.state === 'out') this.speed = Math.max(BLADE.minSpeed + 1, this.speed * BLADE.heavyDrag);
-+    if (this.state === 'out' && !this.charged) this.speed = Math.max(BLADE.minSpeed + 1, this.speed * BLADE.heavyDrag);
-   }
- 
-   bounce(g) {
-@@ -161,6 +181,8 @@ export class Blade {
-     ctx.save();
-     ctx.translate(this.x, this.y);
-     ctx.rotate(this.angle);
-+    const glow = this.flying ? (this.charged ? 1 : 0) : this.charge / CHARGE.full;
-+    if (glow > 0) ctx.scale(1 + 0.3 * glow, 1 + 0.3 * glow);
-     ctx.fillStyle = COLORS.red;
-     ctx.strokeStyle = COLORS.ink;
-     ctx.lineWidth = 1.6;
-diff --git a/src/config.js b/src/config.js
-index 425a091..16673f0 100644
---- a/src/config.js
-+++ b/src/config.js
+diff --git a/src/core/config.ts b/src/core/config.ts
+index 6ccd829..10fb7a8 100644
+--- a/src/core/config.ts
++++ b/src/core/config.ts
 @@ -46,6 +46,13 @@ export const BLADE = {
    heavyDrag: 0.6, // speed kept after striking a heavy enemy
- };
+ } as const;
  
 +// Hold throw to charge. A tap still throws normally on release.
 +export const CHARGE = {
@@ -93,35 +16,142 @@ index 425a091..16673f0 100644
  export const INPUT_BUFFER = 0.15; // seconds a press stays "live" (survives hitstop)
  
  export const MULT_CAP = 8;
-diff --git a/src/main.js b/src/main.js
-index 7b9bcd8..2ce4461 100644
---- a/src/main.js
-+++ b/src/main.js
+
+diff --git a/src/core/blade.ts b/src/core/blade.ts
+index bfbb82e..f96e90b 100644
+--- a/src/core/blade.ts
++++ b/src/core/blade.ts
 @@ -1,4 +1,4 @@
--import { W, H, ARENA, COLORS, FONT, MULT_CAP, CATCHES_PER_MULT } from './config.js';
-+import { W, H, ARENA, COLORS, FONT, MULT_CAP, CATCHES_PER_MULT, CHARGE } from './config.js';
- import { Rng, norm, circleHit, segCircleHit, TAU } from './util.js';
- import { Input } from './input.js';
- import { Sfx } from './audio.js';
-@@ -158,6 +158,11 @@ class Game {
+-import { BLADE, ARENA, COLORS } from './config.ts';
++import { BLADE, ARENA, COLORS, CHARGE } from './config.ts';
+ import { norm, expDecay } from './util.ts';
+ import type { BladeLike, BladeWorld, EnemyLike, PlayerLike } from './types.ts';
+ 
+@@ -20,6 +20,9 @@ export class Blade implements BladeLike {
+   flightHits = 0;
+   hitSet = new Set<EnemyLike>(); // each enemy can be struck once per leg (out, then again on return)
+   hadTargets = false;
++  charging = false;
++  charge = 0; // seconds held
++  charged = false; // is the current throw a charged one?
+   trail: number[] = [];
+   banked = false;
+ 
+@@ -43,7 +46,22 @@ export class Blade implements BladeLike {
+       this.y = expDecay(this.y, ty, 30, dt);
+       this.angle = Math.atan2(p.faceY, p.faceX);
+       if (this.trail.length) this.trail.shift();
+-      if (p.alive && g.input.consume('throw')) this.throw(g);
++      if (!p.alive) {
++        this.charging = false;
++      } else if (this.charging) {
++        // The throw happens on release; how long the button was held decides which throw.
++        if (g.input.held?.('throw')) {
++          const before = this.charge;
++          this.charge = Math.min(this.charge + dt, CHARGE.full);
++          if (before < CHARGE.full && this.charge >= CHARGE.full) g.onChargeFull?.(this);
++        } else {
++          this.charging = false;
++          this.throw(g, this.charge >= CHARGE.full);
++        }
++      } else if (g.input.consume('throw')) {
++        this.charging = true;
++        this.charge = 0;
++      }
+       return;
+     }
+ 
+@@ -93,10 +111,12 @@ export class Blade implements BladeLike {
+     if (this.state === 'return' && p.alive && d < p.r + this.r + BLADE.catchPad) this.catch(g);
+   }
+ 
+-  throw(g: BladeWorld): void {
++  throw(g: BladeWorld, charged = false): void {
+     const p = this.p;
+     this.state = 'out';
+-    this.speed = BLADE.throwSpeed;
++    this.charged = charged;
++    this.charge = 0;
++    this.speed = BLADE.throwSpeed * (charged ? CHARGE.speedScale : 1);
+     this.vx = p.faceX * this.speed;
+     this.vy = p.faceY * this.speed;
+     this.x = p.x + p.faceX * (p.r + 4);
+@@ -117,7 +137,7 @@ export class Blade implements BladeLike {
+ 
+   // Called when the blade strikes something heavy on the way out.
+   drag(): void {
+-    if (this.state === 'out') this.speed = Math.max(BLADE.minSpeed + 1, this.speed * BLADE.heavyDrag);
++    if (this.state === 'out' && !this.charged) this.speed = Math.max(BLADE.minSpeed + 1, this.speed * BLADE.heavyDrag);
+   }
+ 
+   bounce(g: BladeWorld): void {
+@@ -169,6 +189,8 @@ export class Blade implements BladeLike {
+     ctx.save();
+     ctx.translate(this.x, this.y);
+     ctx.rotate(this.angle);
++    const glow = this.flying ? (this.charged ? 1 : 0) : this.charge / CHARGE.full;
++    if (glow > 0) ctx.scale(1 + 0.3 * glow, 1 + 0.3 * glow);
+     ctx.fillStyle = COLORS.red;
+     ctx.strokeStyle = COLORS.ink;
+     ctx.lineWidth = 1.6;
+
+diff --git a/src/core/player.ts b/src/core/player.ts
+index a1e92cc..1833524 100644
+--- a/src/core/player.ts
++++ b/src/core/player.ts
+@@ -1,4 +1,4 @@
+-import { PLAYER, ARENA, COLORS } from './config.ts';
++import { PLAYER, ARENA, COLORS, CHARGE } from './config.ts';
+ import { norm, expDecay, clamp, TAU } from './util.ts';
+ import type { PlayerLike, PlayerWorld } from './types.ts';
+ 
+@@ -71,8 +71,9 @@ export class Player implements PlayerLike {
+         this.vy *= 0.35;
+       }
+     } else {
+-      this.vx = expDecay(this.vx, mx * PLAYER.speed, PLAYER.accel, dt);
+-      this.vy = expDecay(this.vy, my * PLAYER.speed, PLAYER.accel, dt);
++      const speed = PLAYER.speed * (g.blade?.charging ? CHARGE.moveScale : 1);
++      this.vx = expDecay(this.vx, mx * speed, PLAYER.accel, dt);
++      this.vy = expDecay(this.vy, my * speed, PLAYER.accel, dt);
+     }
+     this.integrate(dt);
+   }
+
+diff --git a/src/core/sim.ts b/src/core/sim.ts
+index ade7a4a..c17a423 100644
+--- a/src/core/sim.ts
++++ b/src/core/sim.ts
+@@ -157,6 +157,11 @@ export class Sim implements EnemyWorld, BladeWorld, PlayerWorld {
      this.player.squash = 0.5;
    }
  
-+  onChargeFull(b) {
++  onChargeFull(_b: BladeLike): void {
 +    this.sfx.clink();
-+    this.particles.ring(this.player.x, this.player.y, COLORS.red, 16);
++    this.fx.particles.ring(this.player.x, this.player.y, '#d9402b', 16);
 +  }
 +
-   onRecall(b) {
+   onRecall(b: BladeLike): void {
      this.sfx.recall();
-     this.particles.ring(b.x, b.y, COLORS.red, 12);
-@@ -543,6 +548,18 @@ class Game {
+     this.fx.particles.ring(b.x, b.y, '#d9402b', 12);
+
+diff --git a/src/main.ts b/src/main.ts
+index 37040f6..9bb69a5 100644
+--- a/src/main.ts
++++ b/src/main.ts
+@@ -1,4 +1,4 @@
+-import { W, H, ARENA, COLORS, FONT, INPUT_BUFFER, MULT_CAP, CATCHES_PER_MULT, INTRO_TIME } from './core/config.ts';
++import { W, H, ARENA, COLORS, FONT, INPUT_BUFFER, MULT_CAP, CATCHES_PER_MULT, INTRO_TIME, CHARGE } from './core/config.ts';
+ import { Rng, TAU } from './core/util.ts';
+ import { Sim } from './core/sim.ts';
+ import { Blade } from './core/blade.ts';
+@@ -424,6 +424,18 @@ export class Game implements SimFx, ui.UiGame {
        ctx.stroke();
      }
-     for (const e of this.enemies) e.draw(ctx);
+     for (const e of this.sim.enemies) e.draw(ctx);
 +    // Charge ring: fills while throw is held, turns red when the charge is full.
-+    if (b.charging && b.charge > 0.04 && p.alive) {
-+      const k = b.charge / CHARGE.full;
++    if (b.charging && (b.charge ?? 0) > 0.04 && p.alive) {
++      const k = (b.charge ?? 0) / CHARGE.full;
 +      ctx.save();
 +      ctx.strokeStyle = k >= 1 ? COLORS.red : COLORS.ink;
 +      ctx.globalAlpha = 0.35 + 0.5 * k;
@@ -134,25 +164,4 @@ index 7b9bcd8..2ce4461 100644
      p.draw(ctx);
      b.draw(ctx);
    }
-diff --git a/src/player.js b/src/player.js
-index ab9c9cf..85a0902 100644
---- a/src/player.js
-+++ b/src/player.js
-@@ -1,4 +1,4 @@
--import { PLAYER, ARENA, COLORS } from './config.js';
-+import { PLAYER, ARENA, COLORS, CHARGE } from './config.js';
- import { norm, expDecay, clamp, TAU } from './util.js';
- 
- export class Player {
-@@ -67,8 +67,9 @@ export class Player {
-         this.vy *= 0.35;
-       }
-     } else {
--      this.vx = expDecay(this.vx, mx * PLAYER.speed, PLAYER.accel, dt);
--      this.vy = expDecay(this.vy, my * PLAYER.speed, PLAYER.accel, dt);
-+      const speed = PLAYER.speed * (g.blade?.charging ? CHARGE.moveScale : 1);
-+      this.vx = expDecay(this.vx, mx * speed, PLAYER.accel, dt);
-+      this.vy = expDecay(this.vy, my * speed, PLAYER.accel, dt);
-     }
-     this.integrate(dt);
-   }
+

@@ -1,22 +1,50 @@
-import { W, H, ARENA, COLORS, FONT } from './config.js';
-import { TAU, mulberry32 } from './util.js';
+import { W, H, ARENA, COLORS, FONT } from '../core/config.ts';
+import { TAU, mulberry32 } from '../core/util.ts';
+import type { BurstOptions, FloaterOptions, FloatersLike, InkLike, ParticlesLike, ShakeLike } from '../core/types.ts';
 
-const rand = (lo, hi) => lo + Math.random() * (hi - lo); // cosmetic only; gameplay uses the seeded Rng
+const rand = (lo: number, hi: number): number => lo + Math.random() * (hi - lo); // cosmetic only; gameplay uses the seeded Rng
+
+interface Particle {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  life: number;
+  max: number;
+  size: number;
+  color: string;
+  drag: number;
+  ring?: boolean;
+}
+
+interface Floater {
+  x: number;
+  y: number;
+  text: string;
+  size: number;
+  color: string;
+  life: number;
+  max: number;
+  rise: number;
+  font: string;
+}
 
 // Trauma-based screen shake: events add trauma, offset grows with trauma², trauma decays linearly.
-export class Shake {
-  constructor() {
-    this.trauma = 0;
-    this.t = 0;
+export class Shake implements ShakeLike {
+  trauma = 0;
+  t = 0;
+  scale = 1;
+
+  add(amount: number): void {
+    this.trauma = Math.min(1, this.trauma + amount * this.scale);
   }
-  add(amount) {
-    this.trauma = Math.min(1, this.trauma + amount);
-  }
-  update(dt) {
+
+  update(dt: number): void {
     this.t += dt;
     this.trauma = Math.max(0, this.trauma - dt * 1.8);
   }
-  offset() {
+
+  offset(): [number, number, number] {
     const s = this.trauma * this.trauma;
     const t = this.t;
     return [
@@ -27,11 +55,10 @@ export class Shake {
   }
 }
 
-export class Particles {
-  constructor() {
-    this.list = [];
-  }
-  burst(x, y, o = {}) {
+export class Particles implements ParticlesLike {
+  list: Particle[] = [];
+
+  burst(x: number, y: number, o: BurstOptions = {}): void {
     const { count = 10, speed = [60, 260], life = [0.25, 0.6], size = [1.5, 4.5], color = COLORS.ink, dirX = 0, dirY = 0, spread = TAU, drag = 5 } = o;
     const base = dirX || dirY ? Math.atan2(dirY, dirX) : 0;
     for (let i = 0; i < count; i++) {
@@ -41,10 +68,12 @@ export class Particles {
       this.list.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: l, max: l, size: rand(size[0], size[1]), color, drag });
     }
   }
-  ring(x, y, color, radius = 22) {
+
+  ring(x: number, y: number, color: string, radius = 22): void {
     this.list.push({ x, y, vx: 0, vy: 0, life: 0.35, max: 0.35, size: radius, color, drag: 0, ring: true });
   }
-  update(dt) {
+
+  update(dt: number): void {
     const l = this.list;
     for (let i = l.length - 1; i >= 0; i--) {
       const p = l[i];
@@ -61,7 +90,8 @@ export class Particles {
       p.y += p.vy * dt;
     }
   }
-  draw(ctx) {
+
+  draw(ctx: CanvasRenderingContext2D): void {
     for (const p of this.list) {
       const a = p.life / p.max;
       ctx.globalAlpha = Math.min(1, a * 1.4);
@@ -83,25 +113,33 @@ export class Particles {
 }
 
 // The floor. Ink lands here and stays for the whole run: by the end, each run is a painting.
-export class InkLayer {
+export class InkLayer implements InkLike {
+  canvas: HTMLCanvasElement;
+  ctx: CanvasRenderingContext2D;
+
   constructor() {
     this.canvas = document.createElement('canvas');
     this.canvas.width = W * 2;
     this.canvas.height = H * 2;
-    this.ctx = this.canvas.getContext('2d');
+    const ctx = this.canvas.getContext('2d');
+    if (!ctx) throw new Error('Recall needs a 2D canvas');
+    this.ctx = ctx;
     this.ctx.scale(2, 2);
   }
-  clear() {
+
+  clear(): void {
     this.ctx.clearRect(0, 0, W, H);
   }
-  clip(c) {
+
+  private clip(c: CanvasRenderingContext2D): void {
     c.save();
     c.beginPath();
     c.rect(ARENA.x + 2, ARENA.y + 2, ARENA.w - 4, ARENA.h - 4);
     c.clip();
   }
+
   // A blot: a lumpy core plus droplets flung along (dirX, dirY).
-  blot(x, y, r, color, dirX = 0, dirY = 0, alpha = 0.88) {
+  blot(x: number, y: number, r: number, color: string, dirX = 0, dirY = 0, alpha = 0.88): void {
     const c = this.ctx;
     this.clip(c);
     c.fillStyle = color;
@@ -129,7 +167,8 @@ export class InkLayer {
     }
     c.restore();
   }
-  dot(x, y, r, color, alpha) {
+
+  dot(x: number, y: number, r: number, color: string, alpha: number): void {
     const c = this.ctx;
     this.clip(c);
     c.globalAlpha = alpha;
@@ -141,17 +180,18 @@ export class InkLayer {
   }
 }
 
-export class Floaters {
-  constructor() {
-    this.list = [];
-  }
-  add(x, y, text, { size = 15, color = COLORS.ink, life = 0.8, rise = 36, font = FONT.mono } = {}) {
+export class Floaters implements FloatersLike {
+  list: Floater[] = [];
+
+  add(x: number, y: number, text: string, { size = 15, color = COLORS.ink, life = 0.8, rise = 36, font = FONT.mono }: FloaterOptions = {}): void {
     this.list.push({ x, y, text, size, color, life, max: life, rise, font });
   }
-  update(dt) {
+
+  update(dt: number): void {
     this.list = this.list.filter((f) => (f.life -= dt) > 0);
   }
-  draw(ctx) {
+
+  draw(ctx: CanvasRenderingContext2D): void {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     for (const f of this.list) {
@@ -167,11 +207,12 @@ export class Floaters {
 }
 
 // Pre-rendered paper and arena border, drawn once at 2× for crisp scaling.
-export function makeBackground() {
+export function makeBackground(): HTMLCanvasElement {
   const c = document.createElement('canvas');
   c.width = W * 2;
   c.height = H * 2;
   const x = c.getContext('2d');
+  if (!x) throw new Error('Recall needs a 2D canvas');
   x.scale(2, 2);
   const r = mulberry32(7); // fixed seed: same paper every time
 
@@ -204,17 +245,17 @@ export function makeBackground() {
   x.fillStyle = g;
   x.fillRect(ARENA.x, ARENA.y, ARENA.w, ARENA.h);
 
-  const rough = (inset, alpha, width) => {
+  const rough = (inset: number, alpha: number, width: number): void => {
     x.globalAlpha = alpha;
     x.strokeStyle = COLORS.ink;
     x.lineWidth = width;
     x.lineJoin = 'round';
-    const pts = [];
+    const pts: Array<[number, number]> = [];
     const L = ARENA.x - inset;
     const T = ARENA.y - inset;
     const R = ARENA.x + ARENA.w + inset;
     const B = ARENA.y + ARENA.h + inset;
-    const edge = (x0, y0, x1, y1) => {
+    const edge = (x0: number, y0: number, x1: number, y1: number): void => {
       const n = Math.ceil(Math.hypot(x1 - x0, y1 - y0) / 22);
       for (let i = 0; i < n; i++) pts.push([x0 + ((x1 - x0) * i) / n + (r() - 0.5) * 1.4, y0 + ((y1 - y0) * i) / n + (r() - 0.5) * 1.4]);
     };

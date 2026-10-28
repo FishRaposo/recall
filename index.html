@@ -5,15 +5,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Recall</title>
   <meta name="description" content="A small arcade game about one blade that always comes back. Throw it, call it home, catch it to build your multiplier.">
-  <style>
-    html, body { margin: 0; height: 100%; background: #cfc4ad; overflow: hidden; }
-    canvas { display: block; width: 100%; height: 100%; outline: none; touch-action: none; }
-    noscript { position: fixed; inset: 0; display: grid; place-items: center; font: 16px Georgia, serif; color: #1d1b1a; }
-  </style>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="dist/styles.css">
 </head>
 <body>
-  <canvas id="game" tabindex="0" aria-label="Recall: game canvas. Click to begin."></canvas>
+  <canvas id="game" tabindex="0" aria-label="Recall: game canvas. Click or tap to begin."></canvas>
+
+  <div class="hud-buttons">
+    <button id="pause-btn" type="button" aria-label="Pause">pause</button>
+    <button id="settings-btn" type="button" aria-label="Settings">settings</button>
+  </div>
+  <div class="touch-buttons" aria-label="Touch controls">
+    <button id="dash-btn" type="button" aria-label="Dash">dash</button>
+    <button id="throw-btn" type="button" aria-label="Throw or recall">throw</button>
+  </div>
+
+  <div id="ui"></div>
+  <p id="announcer" class="sr-only" aria-live="polite"></p>
   <noscript>Recall needs JavaScript to run.</noscript>
-  <script type="module" src="src/main.js"></script>
+  <script type="module" src="dist/main.js"></script>
 </body>
 </html>

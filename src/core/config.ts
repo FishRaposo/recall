@@ -15,12 +15,12 @@ export const COLORS = {
   redDark: '#9e2b1c',
   ochre: '#c18d22',
   grey: '#958c7c',
-};
+} as const;
 
 export const FONT = {
   serif: '"Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif',
   mono: 'ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace',
-};
+} as const;
 
 export const PLAYER = {
   r: 11,
@@ -31,7 +31,7 @@ export const PLAYER = {
   dashCooldown: 0.7,
   maxHp: 3,
   invuln: 1.3,
-};
+} as const;
 
 export const BLADE = {
   r: 9,
@@ -44,9 +44,16 @@ export const BLADE = {
   bounce: 0.82, // speed kept on a wall bounce
   catchPad: 6,
   heavyDrag: 0.6, // speed kept after striking a heavy enemy
-};
+} as const;
 
 export const INPUT_BUFFER = 0.15; // seconds a press stays "live" (survives hitstop)
 
 export const MULT_CAP = 8;
 export const CATCHES_PER_MULT = 2;
+
+export const INTRO_TIME = 1.7;
+export const SPAWN_TIME = 0.75;
+export const HITSTOP_HIT = 0.04;
+export const HITSTOP_KILL = 0.065;
+export const HITSTOP_HURT = 0.12;
+export const DEATH_TIME = 1.1;

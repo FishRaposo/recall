@@ -1,21 +1,22 @@
-diff --git a/src/main.js b/src/main.js
-index 7b9bcd8..ac52d38 100644
---- a/src/main.js
-+++ b/src/main.js
-@@ -293,7 +293,6 @@ class Game {
+diff --git a/src/core/sim.ts b/src/core/sim.ts
+index ade7a4a..93dbfe3 100644
+--- a/src/core/sim.ts
++++ b/src/core/sim.ts
+@@ -283,7 +283,6 @@ export class Sim implements EnemyWorld, BladeWorld, PlayerWorld {
          }
          this.sfx.spawn();
        }
--      if (!this.groups.length && !this.enemies.length && this.state === 'playing' && !this.waveLock) this.waveCleared();
+-      if (!this.groups.length && !this.enemies.length && !this.newEnemies.length && this.mode === 'playing' && !this.waveLock) this.waveCleared();
      } else if (this.waveState === 'clear') {
        this.waveT -= dt;
-       if (this.waveT <= 0 && this.state === 'playing') this.startWave(this.wave + 1);
-@@ -330,6 +329,8 @@ class Game {
+       if (this.waveT <= 0 && this.mode === 'playing') this.startWave(this.wave + 1);
+@@ -320,6 +319,8 @@ export class Sim implements EnemyWorld, BladeWorld, PlayerWorld {
      }
  
      this.enemies = this.enemies.filter((e) => !e.dead);
 +    // Clear the wave on the same frame as the last kill, not one frame later.
-+    if (this.waveState === 'fight' && !this.groups.length && !this.enemies.length && this.state === 'playing' && !this.waveLock) this.waveCleared();
++    if (this.waveState === 'fight' && !this.groups.length && !this.enemies.length && this.mode === 'playing' && !this.waveLock) this.waveCleared();
      if (this.newEnemies.length) {
        this.enemies.push(...this.newEnemies);
        this.newEnemies.length = 0;
+

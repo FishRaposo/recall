@@ -27,8 +27,9 @@ Each bug is the kind that reads as plausible in review: a cleanup that clears a 
 ## Verifying the pack
 
 ```bash
-npm install
+npm ci
 npx playwright-core install chromium   # once
+npm run build
 npm run tasks
 ```
 
@@ -45,7 +46,7 @@ ok    feat-02-charged-throw        feature  starting state: fail  ·  solution: 
 
 ## How the checks reach into the game
 
-Loading the game with `?harness` stops it from advancing on its own and exposes `window.__recall.test` ([src/harness.js](../src/harness.js)): start a seeded run, place the player, spawn enemies, script movement, aim and button presses or holds, and step frames at a fixed 1/60 s. The checks drive the same code a player does, through the same input layer, and get the same answer every run.
+Loading the game with `?harness` stops it from advancing on its own and exposes `window.__recall.test` ([src/harness.ts](../src/harness.ts)): start a seeded run, place the player, spawn enemies, script movement, aim and button presses or holds, and step frames at a fixed 1/60 s. The checks drive the same code a player does, through the same input layer, and get the same answer every run.
 
 Checks test behavior, not implementation. The bug-02 check, for example, passes for either reasonable fix (moving the wave-clear check back, or counting queued spawns), because it only asserts that a wave never clears while an enemy is alive.
 

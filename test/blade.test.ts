@@ -1,14 +1,19 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { Blade } from '../src/blade.js';
-import { ARENA } from '../src/config.js';
+import { Blade } from '../src/core/blade.ts';
+import { ARENA } from '../src/core/config.ts';
+import type { BladeWorld, PlayerLike, SimInput } from '../src/core/types.ts';
 
 // A minimal stand-in for the game: the blade only needs these hooks.
-function harness(player) {
-  const g = {
+function harness(): BladeWorld & { caught: number; throwQueued: boolean } {
+  const g: BladeWorld & { caught: number; throwQueued: boolean } = {
     caught: 0,
     throwQueued: false,
-    input: { consume: (a) => (a === 'throw' && g.throwQueued ? ((g.throwQueued = false), true) : false) },
+    input: {
+      moveVector: () => [0, 0] as [number, number],
+      aimDir: () => [1, 0] as [number, number],
+      consume: (a: 'throw' | 'dash') => (a === 'throw' && g.throwQueued ? ((g.throwQueued = false), true) : false),
+    } satisfies SimInput,
     hasTargets: () => false,
     onThrow() {},
     onRecall() {},
@@ -19,8 +24,8 @@ function harness(player) {
   return g;
 }
 
-function makePlayer(x, y, angle) {
-  return { x, y, r: 11, alive: true, faceX: Math.cos(angle), faceY: Math.sin(angle) };
+function makePlayer(x: number, y: number, angle: number): PlayerLike {
+  return { x, y, r: 11, alive: true, faceX: Math.cos(angle), faceY: Math.sin(angle) } as PlayerLike;
 }
 
 // Regression: the returning blade used to blend its heading with the direction home.
@@ -32,7 +37,7 @@ for (const fps of [30, 60, 144]) {
     const cy = ARENA.y + ARENA.h / 2;
     for (let i = 0; i < 24; i++) {
       const p = makePlayer(cx, cy, (i / 24) * Math.PI * 2);
-      const g = harness(p);
+      const g = harness();
       const b = new Blade(p);
       b.throw(g);
       let t = 0;
@@ -48,7 +53,7 @@ for (const fps of [30, 60, 144]) {
 
 test('early recall turns the blade home immediately and it still arrives', () => {
   const p = makePlayer(ARENA.x + 200, ARENA.y + 200, 0);
-  const g = harness(p);
+  const g = harness();
   const b = new Blade(p);
   b.throw(g);
   for (let i = 0; i < 5; i++) b.update(1 / 60, g);
@@ -65,7 +70,7 @@ test('early recall turns the blade home immediately and it still arrives', () =>
 
 test('blade returns to a player who keeps moving', () => {
   const p = makePlayer(ARENA.x + 300, ARENA.y + 230, 0.3);
-  const g = harness(p);
+  const g = harness();
   const b = new Blade(p);
   b.throw(g);
   let t = 0;
@@ -80,7 +85,7 @@ test('blade returns to a player who keeps moving', () => {
 
 test('blade never leaves the arena', () => {
   const p = makePlayer(ARENA.x + 20, ARENA.y + 20, Math.PI * 0.25);
-  const g = harness(p);
+  const g = harness();
   const b = new Blade(p);
   b.throw(g);
   for (let i = 0; i < 300 && !g.caught; i++) {

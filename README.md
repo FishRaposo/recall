@@ -15,10 +15,11 @@ Designed and built with AI assistance (Claude) to Vinícius Raposo's brief, then
 ```bash
 git clone https://github.com/FishRaposo/recall.git
 cd recall
-npm start            # serves the folder at http://localhost:8080
+npm ci               # dev-only tooling: TypeScript, Playwright and axe
+npm start            # builds, watches and serves http://localhost:8080
 ```
 
-Any static server works (`python -m http.server` too). Opening `index.html` straight from disk won't, because browsers block ES modules on `file://`.
+Node 24 LTS is required. `npm start` builds `dist/`; opening `index.html` straight from disk won't work, because browsers block ES modules on `file://`.
 
 ## Task pack
 
@@ -26,13 +27,14 @@ Any static server works (`python -m http.server` too). Opening `index.html` stra
 
 ## Controls
 
-| | Mouse + keyboard | Keyboard only | Gamepad |
-|---|---|---|---|
-| Move | WASD | arrows | left stick |
-| Aim | mouse | follows movement | right stick |
-| Throw / recall | left click | Z or space | A, RB or RT |
-| Dash | right click or shift | X | B, LB or LT |
-| Pause · mute · fullscreen | esc · M · F | esc · M · F | start |
+| | Mouse + keyboard | Keyboard only | Gamepad | Touch |
+|---|---|---|---|---|
+| Move | WASD | arrows | left stick | drag |
+| Aim | mouse | follows movement | right stick | tap |
+| Throw / recall | left click | Z or space | A, RB or RT | tap or **throw** button |
+| Dash | right click or shift | X | B, LB or LT | **dash** button |
+| Pause · mute · fullscreen | esc · M · F | esc · M · F | start | **pause** button |
+| Settings | O or **settings** | O | | **settings** button |
 
 ## How it plays
 
@@ -41,57 +43,66 @@ Any static server works (`python -m http.server` too). Opening `index.html` stra
 - **Nothing is unfair on purpose.** Enemies fade in for 0.75 s before they're solid and never spawn within 200 px of you; darters lock their aim and draw the line before they move; spitters glow before they fire.
 - **Every third wave restores a heart.** Every fifth wave is heavy on brutes.
 
+## Save and settings
+
+- Settings (`recall.settings.v1`) keep volume, mute, shake, flashes and reduced motion. Reduced motion is the default when the operating system asks for it, and it removes screen shake and flashes.
+- The pause and settings dialogs are real DOM dialogs with focus handling and `aria-live` announcements; all storage reads are guarded, so private windows still play without persistence.
+- A run is still one sitting; the game-over screen exports the painted floor as a PNG with **S**.
+
 ## Under the hood
 
-No engine, no dependencies, no asset files: about 2,100 lines of plain JavaScript on a 2D canvas.
+No engine, no runtime dependencies, no asset files: TypeScript compiled to browser-native ES modules, on a 2D canvas. Sound is synthesized at runtime with WebAudio.
 
-- **Game feel is code you can read.** Hitstop on every hit (the simulation freezes for 40 to 120 ms while the camera keeps shaking), trauma-based screen shake, squash on the player, hit flashes, a trail on the blade, and a hit sound that climbs a semitone per enemy struck in one throw, so a long chain sounds like a scale.
-- **Sound is synthesized at runtime** with WebAudio: oscillators and filtered noise, no audio files.
+- **The simulation is headless.** `src/core/sim.ts` owns the run, waves, collision, scoring and the catch/combo rule. It takes injected input and effects, so the Node tests run the exact loop the browser runs. The browser shell only feeds input, applies sound/ink/particles and draws.
+- **Content is one catalog.** `src/content/enemies.ts` is the single source for each enemy's radius, cost, unlock wave, points, knockback, speed and behaviour. The wave composer reads the same catalog, so the old cost/radius duplication is gone.
+- **Game feel is code you can read.** Hitstop on every hit (the simulation freezes while the camera keeps shaking), trauma-based screen shake, squash on the player, hit flashes, a trail on the blade, and a hit sound that climbs a semitone per enemy struck in one throw.
 - **Inputs are buffered for 150 ms**, so a click made during hitstop still throws when the frame resumes.
 - **Swept collision.** The blade moves up to ~17 px per frame; enemies are tested against the segment it travelled, not its position, so it never tunnels through a small enemy.
-- **Frame-rate independent smoothing** (`expDecay`) for movement and steering: the game plays the same at 30, 60 and 144 Hz, and there's a test that checks it.
+- **Frame-rate independent smoothing** (`expDecay`) for movement and steering: the game plays the same at 30, 60 and 144 Hz, and there's a test for it.
 - **Seeded randomness.** Wave composition and spawn positions come from a seeded PRNG; `?seed=123` replays the same run layout. `?debug` shows fps, entity counts and the seed.
-- **The floor is a second canvas.** Kills, dashes and wall bounces stamp ink into it, and **S** on the game-over screen exports it as a PNG.
 
-The design reasoning and the bug that almost shipped are in [docs/DESIGN.md](docs/DESIGN.md).
-
-## Project layout
-
-```
-index.html        page shell
-src/main.js       game loop, states, collision, scoring, rendering
-src/player.js     movement and dash
-src/blade.js      the blade's out / return / held state machine
-src/enemies.js    the five enemy types
-src/waves.js      wave composition (pure, unit-tested)
-src/fx.js         shake, particles, ink layer, floating text, paper background
-src/audio.js      synthesized sound effects
-src/input.js      keyboard, mouse and gamepad behind one interface
-src/ui.js         HUD, title, pause and game-over screens
-src/config.js     every tunable number in one place
-src/harness.js    deterministic test harness (?harness): scripted input, fixed-step frames
-test/             node:test suites
-tasks/            the task pack and its verifier
-```
+The design reasoning and the bug that almost shipped are in [docs/DESIGN.md](docs/DESIGN.md). Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Content: [docs/CONTENT.md](docs/CONTENT.md).
 
 ## Tests
 
 ```bash
-npm test         # 18 tests: blade homing at 30/60/144 fps, wave budgets, collision, RNG
-npm run check    # syntax check of every module
-npm run tasks    # the task pack: every check fails on its starting state, passes on its solution
+npm run check    # typecheck source and tests
+npm run build    # emit the browser build to dist/
+npm test         # 26 tests: blade homing, wave budgets, headless sim, collision, RNG, settings
+npm run tasks    # six tasks: every check fails before, passes after
+npm run smoke    # real journeys in Chromium, Firefox and WebKit
+npm run a11y     # axe scan of the title, settings, pause and game over
+npm run verify   # everything above, plus module-graph and boundary checks
 ```
 
-`?harness` freezes the game's clock and exposes `window.__recall.test`, so a check can place the player, spawn enemies, script input and step frames at a fixed 1/60 s against the real game in a real browser. See [src/harness.js](src/harness.js).
+`scripts/smoke.mjs` plays the real page: title, settings, a wave, keyboard movement, a throw, pause/resume, death/restart and a mobile touch drag and throw. It runs in Chromium, Firefox and WebKit and fails on any console error, page error or failed request. `scripts/smoke.py` and `scripts/record_media.py` remain optional Python media tools.
 
-The browser-side modules were also exercised by scripted headless play-throughs (one with player damage switched off, reaching wave 7) with no console errors.
+## Development
+
+- [`AGENTS.md`](AGENTS.md) — commands, invariants and the task-pack rules.
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — modules, simulation, determinism, build/deploy.
+- [`docs/CONTENT.md`](docs/CONTENT.md) — adding an enemy or wave behaviour.
+- [`docs/RELEASING.md`](docs/RELEASING.md) — version, checks, tag, release and itch handoff.
+- [`../STANDARD.md`](../STANDARD.md) — the shared contract across the three games.
+
+## Project layout
+
+```
+src/core/         simulation, entities, waves, config, utilities (no DOM)
+src/content/      the enemy catalog
+src/platform/     input (keyboard/mouse/touch/pad), audio, storage, settings
+src/presentation/ renderer, HUD, effects, accessible dialogs
+src/main.ts       composition root: input, screens, effects, save/paint
+test/             node:test suites, including the headless simulation
+tasks/            the task pack and its verifier
+```
 
 ## Limitations
 
-- No touch controls yet: it needs a mouse, keyboard or gamepad.
-- Controls can't be rebound.
-- Tested in Chromium. Firefox and Safari should work (it uses only standard canvas and WebAudio APIs) but haven't been verified.
-- Sound starts after the first click or key press, because browsers block audio until the page gets a user gesture.
+- No key rebinding or colour-blind palette yet; reduced motion, shake, flashes and volume are available.
+- Smoke-tested in Chromium, Firefox and WebKit. WebKit-on-Linux is a compatibility check, not Safari-on-macOS proof.
+- A run is not saved between sessions; the game-over screen exports the painting instead.
+- Spatial separation is O(n²); fine at the 20 to 40 enemies the waves produce.
 
 ## License
 

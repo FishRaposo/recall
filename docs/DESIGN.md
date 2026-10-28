@@ -34,20 +34,20 @@ The returning blade steered by blending two unit vectors, its current heading an
 
 A scripted play-through stalled on wave 3. Tracing the blade frame by frame showed it turning home and then flying off the edge of the map at full speed. Thrown in a straight line and recalled, its heading was the exact opposite of the direction home; blending a vector with its opposite gives a shorter vector pointing the *same* way, so normalizing it undid the turn every frame. A second, subtler failure sat behind it: with a constant turn rate, a fast blade could fall into orbit around a stationary player and never arrive.
 
-The fix rotates the heading by a fraction of the signed angle to the target (no degenerate case at 180°), and scales the turn rate up as the blade closes in (`steer × (1 + 160 / distance)`), which makes orbiting impossible. The returning blade is also clamped inside the arena. `test/blade.test.js` throws in 24 directions at 30, 60 and 144 fps and requires every throw to come home within 2.5 s; with the old steering, four of those tests fail.
+The fix rotates the heading by a fraction of the signed angle to the target (no degenerate case at 180°), and scales the turn rate up as the blade closes in (`steer × (1 + 160 / distance)`), which makes orbiting impossible. The returning blade is also clamped inside the arena. `test/blade.test.ts` throws in 24 directions at 30, 60 and 144 fps and requires every throw to come home within 2.5 s; with the old steering, four of those tests fail.
 
 ## How it was tested
 
-- 18 unit tests under `node --test`: blade homing (stationary and moving player, early recall, arena bounds), wave budgets, unlock order, determinism under a fixed seed, swept collision and frame-rate independence of the smoothing function.
-- Headless Chromium play-throughs driven through real mouse and keyboard input: a short run checking the title, play, death and restart flow, and a longer run, with player damage switched off, reaching wave 7 with every enemy type on screen. Both run with zero console errors at a steady 60 fps.
+- 26 unit tests under `node --test`: blade homing (stationary and moving player, early recall, arena bounds), wave budgets, unlock order, determinism under a fixed seed, swept collision, frame-rate independence, saves/settings, and a headless simulation suite that runs the real run loop in Node with injected input and effects.
+- Browser journeys in Chromium, Firefox and WebKit: title, settings, a live wave, keyboard movement, a throw, pause/resume, death/restart, and a mobile touch drag and throw. Each fails on any console error, page error or failed request. An axe scan covers the title, settings, pause and game-over DOM overlays.
+- The six task checks run against the built game in Chromium; every bug fails before and passes after, and both features fail before and pass after.
 
 ## What would change with more time
 
-- **Touch controls**: virtual stick for movement, tap to throw toward the tap.
-- **Rebindable controls** and an options screen (volume, shake intensity, reduced flashing).
+- **Rebindable controls** and a colour-blind palette.
 - **A daily seed** with a shared leaderboard. The seeded RNG already makes a run's waves reproducible; input recording would make whole runs replayable.
 - **Spatial partitioning** if enemy counts grow. Separation is O(n²) today, fine at the 20 to 40 enemies the waves produce, not at 500.
 
 ## Sixty seconds, out loud
 
-Recall is an arcade game where your only weapon is a blade that comes back to you. The twist is that catching it is the combo: catch a blade that hit something and your multiplier goes up; catch an empty one and it resets. So the skill is in the return, positioning so it comes home through the enemies. It's plain JavaScript on a canvas, no engine and no asset files; even the sound is synthesized. The interesting engineering was game feel, hitstop, shake and input buffering so presses survive the freeze, and one homing bug where a blade recalled in a straight line flew away forever, because blending a heading with its exact opposite cancels out. The fix was to rotate the heading instead, and there's a test that throws in 24 directions at three frame rates to keep it fixed.
+Recall is an arcade game where your only weapon is a blade that comes back to you. The twist is that catching it is the combo: catch a blade that hit something and your multiplier goes up; catch an empty one and it resets. So the skill is in the return, positioning so it comes home through the enemies. It's TypeScript compiled to browser-native ES modules on a canvas, no engine and no asset files; even the sound is synthesized. The interesting engineering was game feel, hitstop, shake and input buffering so presses survive the freeze, and one homing bug where a blade recalled in a straight line flew away forever, because blending a heading with its exact opposite cancels out. The fix was to rotate the heading instead, and there's a test that throws in 24 directions at three frame rates to keep it fixed.

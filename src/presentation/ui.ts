@@ -1,12 +1,48 @@
-import { W, H, ARENA, COLORS, FONT } from './config.js';
-import { TAU } from './util.js';
+import { W, H, ARENA, COLORS, FONT } from '../core/config.ts';
+import { TAU } from '../core/util.ts';
+import type { Best, PlayerLike, RunStats, WaveState } from '../core/types.ts';
 
-export function text(ctx, str, x, y, o = {}) {
+export interface UiGame {
+  player: PlayerLike;
+  wave: number;
+  displayScore: number;
+  mult: number;
+  combo: number;
+  multCap: number;
+  catchesPerMult: number;
+  sfx: { muted: boolean };
+  waveState: WaveState;
+  waveT: number;
+  introTime: number;
+  debutNote: string | null;
+  hintAlpha: number;
+  input: { aimSource: 'mouse' | 'keys' | 'pad' | 'touch'; mouse: { x: number; y: number; inside: boolean } };
+  clock: number;
+  best: Best;
+  overT: number;
+  newBest: boolean;
+  stats: RunStats;
+  score: number;
+}
+
+export interface TextOptions {
+  size?: number;
+  font?: string;
+  color?: string;
+  align?: CanvasTextAlign;
+  baseline?: CanvasTextBaseline;
+  weight?: string;
+  style?: string;
+  alpha?: number;
+  spacing?: number;
+}
+
+export function text(ctx: CanvasRenderingContext2D, str: string, x: number, y: number, o: TextOptions = {}): void {
   const { size = 16, font = FONT.serif, color = COLORS.ink, align = 'center', baseline = 'middle', weight = '', style = '', alpha = 1, spacing = 0 } = o;
   ctx.save();
   ctx.globalAlpha = alpha;
   ctx.font = `${style} ${weight} ${size}px ${font}`;
-  if ('letterSpacing' in ctx) ctx.letterSpacing = `${spacing}px`;
+  if ('letterSpacing' in ctx) (ctx as CanvasRenderingContext2D & { letterSpacing: string }).letterSpacing = `${spacing}px`;
   ctx.fillStyle = color;
   ctx.textAlign = align;
   ctx.textBaseline = baseline;
@@ -14,9 +50,9 @@ export function text(ctx, str, x, y, o = {}) {
   ctx.restore();
 }
 
-const fmt = (n) => Math.round(n).toLocaleString('en-US');
+const fmt = (n: number): string => Math.round(n).toLocaleString('en-US');
 
-export function drawHud(ctx, g) {
+export function drawHud(ctx: CanvasRenderingContext2D, g: UiGame): void {
   const p = g.player;
   for (let i = 0; i < p.maxHp; i++) {
     const x = 44 + i * 24;
@@ -51,7 +87,7 @@ export function drawHud(ctx, g) {
   if (g.sfx.muted) text(ctx, 'muted', 34 + 3 * 24 + 18, 26, { size: 11, font: FONT.mono, align: 'left', color: COLORS.grey });
 }
 
-export function drawWaveBanner(ctx, g) {
+export function drawWaveBanner(ctx: CanvasRenderingContext2D, g: UiGame): void {
   if (g.waveState !== 'intro') return;
   const t = 1 - g.waveT / g.introTime;
   const a = Math.min(1, t * 4, (1 - t) * 3);
@@ -70,7 +106,7 @@ export function drawWaveBanner(ctx, g) {
   if (g.debutNote) text(ctx, g.debutNote, W / 2, H / 2 + 22, { size: 16, style: 'italic', alpha: a * 0.75 });
 }
 
-export function drawHint(ctx, g) {
+export function drawHint(ctx: CanvasRenderingContext2D, g: UiGame): void {
   if (g.hintAlpha <= 0.01) return;
   text(ctx, 'click to throw  ·  click again to call it back  ·  catch it to raise your multiplier', W / 2, ARENA.y + ARENA.h - 18, {
     size: 13,
@@ -79,7 +115,7 @@ export function drawHint(ctx, g) {
   });
 }
 
-export function drawReticle(ctx, g) {
+export function drawReticle(ctx: CanvasRenderingContext2D, g: UiGame): void {
   if (g.input.aimSource !== 'mouse' || !g.input.mouse.inside) return;
   const { x, y } = g.input.mouse;
   ctx.save();
@@ -96,7 +132,7 @@ export function drawReticle(ctx, g) {
   ctx.restore();
 }
 
-function panel(ctx, x, y, w, h) {
+function panel(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number): void {
   ctx.save();
   ctx.fillStyle = COLORS.paper;
   ctx.globalAlpha = 0.93;
@@ -110,7 +146,7 @@ function panel(ctx, x, y, w, h) {
   ctx.restore();
 }
 
-export function drawTitle(ctx, g) {
+export function drawTitle(ctx: CanvasRenderingContext2D, g: UiGame): void {
   const t = g.clock;
   text(ctx, 'RECALL', W / 2, 168, { size: 104, weight: 'bold', spacing: 14 });
   // A red stroke under the title, like a cut.
@@ -125,11 +161,11 @@ export function drawTitle(ctx, g) {
   ctx.restore();
   text(ctx, 'throw the blade.  call it home.  paint the floor.', W / 2, 262, { size: 19, style: 'italic' });
 
-  const rows = [
-    ['move', 'WASD  ·  arrows  ·  left stick'],
-    ['aim', 'mouse  ·  right stick'],
-    ['throw / recall', 'click  ·  Z  ·  space  ·  pad A'],
-    ['dash', 'right-click  ·  shift  ·  X  ·  pad B'],
+  const rows: Array<[string, string]> = [
+    ['move', 'WASD  ·  arrows  ·  left stick  ·  touch drag'],
+    ['aim', 'mouse  ·  right stick  ·  tap'],
+    ['throw / recall', 'click  ·  Z  ·  space  ·  pad A  ·  button'],
+    ['dash', 'right-click  ·  shift  ·  X  ·  pad B  ·  button'],
     ['pause  ·  mute  ·  fullscreen', 'esc  ·  M  ·  F'],
   ];
   rows.forEach(([k, v], i) => {
@@ -138,11 +174,11 @@ export function drawTitle(ctx, g) {
     text(ctx, v, W / 2 + 14, y, { size: 13, font: FONT.mono, align: 'left' });
   });
 
-  text(ctx, 'click to begin', W / 2, 466, { size: 18, style: 'italic', alpha: 0.55 + 0.45 * Math.sin(t * 3) });
+  text(ctx, 'click or tap to begin', W / 2, 466, { size: 18, style: 'italic', alpha: 0.55 + 0.45 * Math.sin(t * 3) });
   if (g.best.score > 0) text(ctx, `best  ${fmt(g.best.score)}  ·  wave ${g.best.wave}`, W / 2, 496, { size: 12, font: FONT.mono, color: COLORS.grey });
 }
 
-export function drawPause(ctx) {
+export function drawPause(ctx: CanvasRenderingContext2D): void {
   ctx.save();
   ctx.fillStyle = COLORS.paper;
   ctx.globalAlpha = 0.6;
@@ -152,7 +188,7 @@ export function drawPause(ctx) {
   text(ctx, 'esc or click to resume', W / 2, H / 2 + 30, { size: 13, font: FONT.mono, color: COLORS.grey });
 }
 
-export function drawGameOver(ctx, g) {
+export function drawGameOver(ctx: CanvasRenderingContext2D, g: UiGame): void {
   const w = 440;
   const h = 300;
   const x = (W - w) / 2;
@@ -167,7 +203,7 @@ export function drawGameOver(ctx, g) {
   const s = g.stats;
   const mins = Math.floor(s.time / 60);
   const secs = Math.floor(s.time % 60).toString().padStart(2, '0');
-  const rows = [
+  const rows: Array<[string, string]> = [
     ['wave', `${g.wave}`],
     ['kills', `${s.kills}`],
     ['top multiplier', `×${s.bestMult}`],
