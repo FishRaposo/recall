@@ -31,9 +31,16 @@ export const ENEMIES: EnemyCatalog = {
     note: 'brutes are heavy. they slow the blade down.',
     speed: (wave) => Math.min(64 + wave * 1.5, 92),
   },
+  shell: {
+    kind: 'shell', r: 18, hp: 3, points: 50, cost: 5, unlock: 6, weight: 1.2, knock: 180,
+    note: 'shells turn their plate to the blade. hit them on the way back, or from behind.',
+    speed: () => 58,
+    onBladeHit: (enemy, dx, dy, world) => (enemy as Shell).onBladeHit(dx, dy, world),
+  },
 };
 
 abstract class Enemy implements EnemyLike {
+  kind: EnemyKind;
   x: number;
   y: number;
   vx = 0;
@@ -50,6 +57,7 @@ abstract class Enemy implements EnemyLike {
   protected def: EnemyDef;
 
   constructor(x: number, y: number, def: EnemyDef, instant = false) {
+    this.kind = def.kind;
     this.x = x;
     this.y = y;
     this.def = def;
@@ -393,6 +401,44 @@ export class Spitter extends Enemy {
   }
 }
 
+// A front plate turns the outbound blade. The return leg, or a hit from behind, gets through.
+export class Shell extends Enemy {
+  faceX = 1;
+  faceY = 0;
+  faceLock = false;
+
+  constructor(x: number, y: number, g: EnemyWorld, instant = false) {
+    super(x, y, ENEMIES.shell, instant);
+  }
+
+  protected think(dt: number, g: EnemyWorld): void {
+    if (!this.faceLock) [this.faceX, this.faceY] = norm(g.player.x - this.x, g.player.y - this.y);
+    this.steer(g.player.x, g.player.y, ENEMIES.shell.speed(g.wave), 2, dt);
+  }
+
+  onBladeHit(dx: number, dy: number, g: EnemyWorld): 'deflect' | 'damage' {
+    return g.blade?.state === 'out' && dx * this.faceX + dy * this.faceY < -0.25 ? 'deflect' : 'damage';
+  }
+
+  protected drawBody(ctx: CanvasRenderingContext2D): void {
+    ctx.rotate(Math.atan2(this.faceY, this.faceX));
+    ctx.fillStyle = this.bodyColor;
+    ctx.beginPath();
+    ctx.arc(0, 0, this.r, 0, TAU);
+    ctx.fill();
+    this.outline(ctx);
+    ctx.strokeStyle = this.flash > 0 ? COLORS.ink : COLORS.ochre;
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.arc(0, 0, this.r - 2, -0.9, 0.9);
+    ctx.stroke();
+    ctx.fillStyle = this.flash > 0 ? COLORS.ink : COLORS.paper;
+    ctx.beginPath();
+    ctx.arc(this.r * 0.38, 0, 4, 0, TAU);
+    ctx.fill();
+  }
+}
+
 export function createEnemy(kind: EnemyKind, x: number, y: number, g: EnemyWorld, instant = false): Enemy {
   switch (kind) {
     case 'mite': return new Mite(x, y, g, instant);
@@ -400,5 +446,6 @@ export function createEnemy(kind: EnemyKind, x: number, y: number, g: EnemyWorld
     case 'splitter': return new Splitter(x, y, g, instant);
     case 'spitter': return new Spitter(x, y, g, instant);
     case 'brute': return new Brute(x, y, g, instant);
+    case 'shell': return new Shell(x, y, g, instant);
   }
 }

@@ -8,8 +8,8 @@ export class Player implements PlayerLike {
   vx = 0;
   vy = 0;
   r = PLAYER.r;
-  hp = PLAYER.maxHp;
-  maxHp = PLAYER.maxHp;
+  hp: number = PLAYER.maxHp;
+  maxHp: number = PLAYER.maxHp;
   invuln = 0;
   dashT = 0;
   dashCd = 0;

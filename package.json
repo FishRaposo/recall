@@ -1,6 +1,6 @@
 {
   "name": "recall",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "A small arcade game about one blade that always comes back.",
   "type": "module",
   "private": true,
@@ -13,7 +13,7 @@
     "start": "npm run build && node scripts/dev.mjs 8080",
     "serve": "node scripts/serve.mjs 8080",
     "test": "node --test \"test/**/*.test.ts\"",
-    "test:coverage": "node --test --experimental-test-coverage \"test/**/*.test.ts\"",
+    "test:coverage": "node --test --experimental-test-coverage --test-coverage-lines=75 \"test/**/*.test.ts\"",
     "tasks": "node tasks/verify.mjs",
     "smoke": "node scripts/smoke.mjs",
     "smoke:chromium": "node scripts/smoke.mjs --browser=chromium",

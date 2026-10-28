@@ -2,6 +2,26 @@
 
 All notable changes to Recall are recorded here. The format follows Keep a Changelog; versions follow SemVer.
 
+## [1.3.0] — 2026-10-28
+
+### Added
+
+- **Shell** demo enemy (wave 6): its front plate deflects the outbound blade; the return leg or a hit from behind damages it. The catalog's `onBladeHit` hook is covered by tests.
+- Wave checkpoint save/resume (`recall.save.v1`): seed, RNG state, wave, score, combo, HP and stats; **Continue** on the title; a new run or death clears it.
+- Seed display on the title and game-over screen; **Y** copies a `?seed=` replay link.
+- Coverage floor (75% lines) in `npm run test:coverage`.
+
+### Changed
+
+- New runs checkpoint at wave start; `Sim.resume` rebuilds the wave from the saved RNG state.
+- Title and game-over screens show the run seed.
+- README, content, architecture and agent documentation updated for the Shell/save flow.
+
+### Tests
+
+- 31 unit tests: three Shell tests (front deflect/slow, return damage, back damage), checkpoint round-trip/resume determinism, storage validation, plus the existing suite.
+- Coverage: 77.19% lines, 81.05% branches.
+
 ## [1.2.0] — 2026-10-28
 
 ### Added

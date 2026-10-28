@@ -20,6 +20,8 @@ One weapon, and it leaves your hand. A boomerang-style blade forces a decision o
 | Spitter | camping at range (its shots can be cut out of the air by the blade) |
 | Brute | lazy throws (it soaks three hits and drains the blade's speed on the way out) |
 
+**Shells make the return leg matter.** The Shell's front plate deflects the outbound blade with a spark and a speed loss; the return leg or a back hit damages it. It is the sixth enemy (wave 6) and exists to make the "throw, then position for the catch" decision legible: a straight outbound throw is not enough.
+
 **Fairness is enforced in code, not left to the RNG.** Enemies fade in over 0.75 s and can't spawn within 200 px of the player; if 40 random tries fail, they spawn in the corner farthest away. A debut enemy always appears in its debut wave, so the banner never names something that doesn't show up; that rule has a unit test.
 
 **Feel comes from many small, cheap effects layered together.** Hitstop (40 ms on a hit, 65 ms on a kill, 120 ms when you're hurt) does most of the work: the simulation pauses while the camera keeps shaking, which makes contact read as heavy. Screen shake uses a trauma value that decays linearly while the offset grows with its square, so small events barely move the camera and big ones snap it. The hit sound climbs a semitone for each enemy struck in a single throw.

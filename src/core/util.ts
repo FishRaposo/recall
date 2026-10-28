@@ -44,11 +44,27 @@ export function mulberry32(seed: number): () => number {
 
 export class Rng {
   seed: number;
-  next: () => number;
+  private a: number;
 
   constructor(seed: number) {
     this.seed = seed >>> 0;
-    this.next = mulberry32(this.seed);
+    this.a = this.seed;
+  }
+
+  get state(): number {
+    return this.a;
+  }
+
+  set state(value: number) {
+    this.a = value >>> 0;
+  }
+
+  next(): number {
+    this.a = (this.a + 0x6d2b79f5) >>> 0;
+    let t = this.a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   }
 
   float(lo = 0, hi = 1): number {

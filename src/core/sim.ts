@@ -8,7 +8,7 @@ import { Player } from './player.ts';
 import { Blade } from './blade.ts';
 import type {
   BladeLike, BladeWorld, EnemyCatalog, EnemyKind, EnemyLike, EnemyWorld, PlayerWorld, RunStats,
-  Shot, SimFx, SimInput, SimMode, SpawnGroup, WaveState, Vec,
+  Shot, SimCheckpoint, SimFx, SimInput, SimMode, SpawnGroup, WaveState, Vec,
 } from './types.ts';
 
 export interface SimOptions {
@@ -29,6 +29,7 @@ export class Sim implements EnemyWorld, BladeWorld, PlayerWorld {
   private readonly spawnEnemy: SimOptions['spawn'];
 
   rng = new Rng(1);
+  seed = 1;
   player!: Player;
   blade!: Blade;
   enemies: EnemyLike[] = [];
@@ -70,6 +71,7 @@ export class Sim implements EnemyWorld, BladeWorld, PlayerWorld {
 
   newRun(seed: number): void {
     this.rng = new Rng(seed);
+    this.seed = seed;
     this.player = new Player(ARENA.x + ARENA.w / 2, ARENA.y + ARENA.h / 2);
     this.blade = new Blade(this.player);
     this.enemies = [];
@@ -92,6 +94,7 @@ export class Sim implements EnemyWorld, BladeWorld, PlayerWorld {
   }
 
   startWave(n: number): void {
+    const rngState = this.rng.state;
     this.wave = n;
     this.waveState = 'intro';
     this.waveT = this.introTime;
@@ -100,6 +103,42 @@ export class Sim implements EnemyWorld, BladeWorld, PlayerWorld {
     const debut = (Object.keys(this.catalog) as EnemyKind[]).find((k) => this.catalog[k].unlock === n);
     this.debutNote = debut ? this.catalog[debut].note : null;
     this.sfx.wave();
+    this.fx.onCheckpoint?.({
+      version: 1,
+      seed: this.seed,
+      rngState,
+      wave: n,
+      score: this.score,
+      combo: this.combo,
+      hp: this.player.hp,
+      stats: { ...this.stats },
+    });
+  }
+
+  resume(save: SimCheckpoint): void {
+    this.seed = save.seed;
+    this.rng = new Rng(save.seed);
+    this.rng.state = save.rngState;
+    this.player = new Player(ARENA.x + ARENA.w / 2, ARENA.y + ARENA.h / 2);
+    this.player.hp = Math.max(1, Math.min(this.player.maxHp, save.hp));
+    this.blade = new Blade(this.player);
+    this.enemies = [];
+    this.newEnemies = [];
+    this.shots = [];
+    this.score = save.score;
+    this.combo = save.combo;
+    this.stats = { ...save.stats };
+    this.hitstop = 0;
+    this.timeScale = 1;
+    this.mode = 'playing';
+    this.overT = 0;
+    this.deathT = 0;
+    this.hintAlpha = 1;
+    this.taught = false;
+    this.flash = 0;
+    this.waveLock = false;
+    this.ink.clear();
+    this.startWave(save.wave);
   }
 
   debutNote: string | null = null;
@@ -177,6 +216,16 @@ export class Sim implements EnemyWorld, BladeWorld, PlayerWorld {
     for (const e of this.enemies) {
       if (!e.active || b.hitSet.has(e)) continue;
       if (!segCircleHit(x1, y1, x2, y2, e.x, e.y, e.r + b.r)) continue;
+      const def = this.catalog[e.kind];
+      if (def.onBladeHit?.(e, dx, dy, this) === 'deflect') {
+        b.hitSet.add(e);
+        b.speed *= 0.55;
+        this.sfx.clink();
+        this.fx.shake.add(0.1);
+        this.fx.particles.burst(e.x, e.y, { count: 8, color: '#c18d22', speed: [40, 160] });
+        this.fx.floaters.add(e.x, e.y - e.r, 'clang', { size: 12, color: '#c18d22' });
+        continue;
+      }
       b.hitSet.add(e);
       b.flightHits += 1;
       e.hit(dx, dy, this);

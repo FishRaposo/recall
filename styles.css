@@ -54,6 +54,32 @@ canvas {
   outline-offset: 2px;
 }
 
+#continue-btn {
+  position: fixed;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  min-height: 32px;
+  padding: 0 16px;
+  border: 1.5px solid #1d1b1a;
+  background: #efe8da;
+  color: #1d1b1a;
+  font: bold 12px ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  cursor: pointer;
+}
+
+#continue-btn:hover,
+#continue-btn:focus-visible {
+  background: #d9402b;
+  color: #efe8da;
+  outline: 2px solid #1d1b1a;
+  outline-offset: 2px;
+}
+
+#continue-btn[hidden] {
+  display: none;
+}
+
 .touch-buttons {
   position: fixed;
   right: 18px;

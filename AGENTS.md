@@ -39,10 +39,11 @@ Dependency rule, enforced by `scripts/check-boundaries.mjs`: `core` imports only
 ## Invariants
 
 - `core/sim.ts` is headless: no DOM, no timers. The shell polls input and passes deltas; the sim owns the run.
-- Effects are injected through `SimFx`. Do not reach for `document`, `Audio`, `localStorage` or `performance` inside core.
-- Enemy radius, cost, unlock wave, points, knockback, speed and behaviour live once in `src/content/enemies.ts`. The wave composer reads the catalog; do not add a second stat table.
+- Effects are injected through `SimFx`; checkpoints go through `onCheckpoint`. Do not reach for `document`, `Audio`, `localStorage` or `performance` inside core.
+- Enemy radius, cost, unlock wave, points, knockback, speed and behaviour live once in `src/content/enemies.ts`. The wave composer reads the catalog; do not add a second stat table. Blade reactions use `EnemyDef.onBladeHit` (the Shell pattern).
 - Inputs stay buffered for 150 ms across hitstop.
 - Darter wind-up aim is locked; splitter children keep a wave open; the blade can hit each enemy once per leg.
+- Wave checkpoints save seed, RNG state, wave, score, combo, HP and stats; `Sim.resume` must rebuild the same wave. A new run or death clears the save.
 - Task checks must fail before and pass after. Do not weaken a check to make a refactor pass.
 
 ## Task pack

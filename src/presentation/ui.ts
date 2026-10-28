@@ -4,6 +4,7 @@ import type { Best, PlayerLike, RunStats, WaveState } from '../core/types.ts';
 
 export interface UiGame {
   player: PlayerLike;
+  seed: number;
   wave: number;
   displayScore: number;
   mult: number;
@@ -175,6 +176,7 @@ export function drawTitle(ctx: CanvasRenderingContext2D, g: UiGame): void {
   });
 
   text(ctx, 'click or tap to begin', W / 2, 466, { size: 18, style: 'italic', alpha: 0.55 + 0.45 * Math.sin(t * 3) });
+  text(ctx, `seed ${g.seed}  ·  Y copy`, W / 2, 516, { size: 11, font: FONT.mono, color: COLORS.grey });
   if (g.best.score > 0) text(ctx, `best  ${fmt(g.best.score)}  ·  wave ${g.best.wave}`, W / 2, 496, { size: 12, font: FONT.mono, color: COLORS.grey });
 }
 
@@ -216,5 +218,6 @@ export function drawGameOver(ctx: CanvasRenderingContext2D, g: UiGame): void {
   });
   const ready = g.overT > 0.8;
   text(ctx, 'click or R — again     S — save your painting', W / 2, y + h - 26, { size: 13, font: FONT.mono, alpha: ready ? 1 : 0.3 });
+  text(ctx, `seed ${g.seed}  ·  Y copy`, W / 2, y + h + 18, { size: 11, font: FONT.mono, color: COLORS.grey, alpha: a });
   ctx.restore();
 }

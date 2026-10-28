@@ -5,8 +5,8 @@ import { Blade } from './core/blade.ts';
 import { ENEMIES, createEnemy } from './content/enemies.ts';
 import { Input } from './platform/input.ts';
 import { Sfx } from './platform/audio.ts';
-import { loadBest, saveBest } from './platform/storage.ts';
-import type { Best } from './platform/storage.ts';
+import { loadBest, saveBest, loadSave, saveRun, clearRunSave as clearSavedRun } from './platform/storage.ts';
+import type { Best, RecallSave } from './platform/storage.ts';
 import { loadSettings, saveSettings } from './platform/settings.ts';
 import type { Settings } from './platform/settings.ts';
 import { Shake, Particles, InkLayer, Floaters, makeBackground } from './presentation/fx.ts';
@@ -45,6 +45,8 @@ export class Game implements SimFx, ui.UiGame {
   newBest = false;
   harness: boolean;
   seed = 1;
+  save: RecallSave | null = null;
+  continueBtn: HTMLButtonElement | null = null;
   multCap = MULT_CAP;
   catchesPerMult = CATCHES_PER_MULT;
   titleBlade: Blade | null = null;
@@ -72,7 +74,9 @@ export class Game implements SimFx, ui.UiGame {
     this.best = loadBest();
     this.harness = HARNESS;
     this.sim = new Sim({ catalog: ENEMIES, spawn: createEnemy, input: this.input, fx: this, introTime: INTRO_TIME });
-    this.seed = FIXED_SEED ?? ((Date.now() ^ 0x9e3779b9) >>> 0);
+    this.save = loadSave();
+    this.continueBtn = document.getElementById('continue-btn') as HTMLButtonElement | null;
+    this.seed = this.save?.seed ?? FIXED_SEED ?? ((Date.now() ^ 0x9e3779b9) >>> 0);
     this.paintTitle();
 
     this.resize();
@@ -82,6 +86,7 @@ export class Game implements SimFx, ui.UiGame {
       if (document.hidden) this.pause();
     });
     this.wireButtons();
+    this.refreshContinue();
 
     this.last = performance.now();
     requestAnimationFrame((t) => this.frame(t));
@@ -136,16 +141,59 @@ export class Game implements SimFx, ui.UiGame {
   }
 
   onDeath(): void {
+    this.clearSave();
     this.menus.announce(`Run over on wave ${this.sim.wave}`);
   }
 
   onFinish(score: number, wave: number): void {
     this.screen = 'over';
+    this.clearSave();
     if (score > this.best.score) {
       this.best = { score, wave };
       this.newBest = true;
       saveBest(this.best);
     }
+  }
+
+  onCheckpoint(save: RecallSave): void {
+    if (this.harness) return;
+    this.save = save;
+    saveRun(save);
+  }
+
+  clearSave(): void {
+    clearSavedRun();
+    this.save = null;
+    this.refreshContinue();
+  }
+
+  refreshContinue(): void {
+    if (!this.continueBtn) return;
+    this.continueBtn.hidden = !(this.screen === 'title' && !!this.save);
+  }
+
+  continueRun(): void {
+    const save = this.save;
+    if (!save) return;
+    this.sfx.unlock();
+    this.seed = save.seed;
+    this.sim.resume(save);
+    this.screen = 'playing';
+    this.displayScore = save.score;
+    this.flashT = 0;
+    this.newBest = false;
+    this.input.clearBuffers();
+    this.menus.close();
+    this.refreshContinue();
+    this.menus.announce(`Resumed wave ${save.wave}`);
+  }
+
+  copySeed(): void {
+    const text = `${location.origin}${location.pathname}?seed=${this.seed}`;
+    navigator.clipboard?.writeText(text).then(
+      () => this.menus.announce('Seed copied'),
+      () => this.menus.announce('Could not copy the seed'),
+    );
   }
 
   hurtPlayer(fromX: number, fromY: number): void {
@@ -156,6 +204,7 @@ export class Game implements SimFx, ui.UiGame {
 
   newRun(seedOverride?: number): void {
     this.sfx.unlock();
+    this.clearSave();
     const seed = seedOverride ?? FIXED_SEED ?? ((Date.now() ^ 0x9e3779b9) >>> 0);
     this.seed = seed;
     this.sim.newRun(seed);
@@ -165,6 +214,7 @@ export class Game implements SimFx, ui.UiGame {
     this.newBest = false;
     this.input.clearBuffers();
     this.menus.close();
+    this.refreshContinue();
     this.menus.announce(`Wave 1 · seed ${seed}`);
   }
 
@@ -233,6 +283,7 @@ export class Game implements SimFx, ui.UiGame {
       else this.openSettings();
     });
     pause?.addEventListener('click', () => this.pause());
+    this.continueBtn?.addEventListener('click', () => this.continueRun());
     const bind = (button: HTMLElement | null, action: 'throw' | 'dash'): void => {
       if (!button) return;
       button.addEventListener('pointerdown', (e) => {
@@ -292,9 +343,17 @@ export class Game implements SimFx, ui.UiGame {
       else this.openSettings();
       return;
     }
+    if (inp.was('KeyY')) {
+      this.copySeed();
+      return;
+    }
 
     switch (this.screen) {
       case 'title':
+        if (inp.was('KeyC') && this.save) {
+          this.continueRun();
+          break;
+        }
         if (inp.startPressed()) {
           this.sfx.unlock();
           this.newRun();

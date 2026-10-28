@@ -10,7 +10,7 @@ export interface Rect {
   h: number;
 }
 
-export type EnemyKind = 'mite' | 'darter' | 'splitter' | 'spitter' | 'brute';
+export type EnemyKind = 'mite' | 'darter' | 'splitter' | 'spitter' | 'brute' | 'shell';
 
 export interface EnemyDef {
   kind: EnemyKind;
@@ -24,6 +24,7 @@ export interface EnemyDef {
   heavy?: boolean;
   note: string;
   speed: (wave: number) => number;
+  onBladeHit?: (enemy: EnemyLike, dx: number, dy: number, world: EnemyWorld) => 'deflect' | 'damage';
 }
 
 export type EnemyCatalog = Record<EnemyKind, EnemyDef>;
@@ -158,6 +159,7 @@ export interface BladeWorld {
 }
 
 export interface EnemyLike {
+  kind: EnemyKind;
   x: number;
   y: number;
   vx: number;
@@ -180,6 +182,7 @@ export interface EnemyLike {
 export interface EnemyWorld {
   player: PlayerLike;
   wave: number;
+  blade?: BladeLike;
   ink: InkLike;
   sfx: SfxLike;
   addEnemy(e: EnemyLike): void;
@@ -203,6 +206,7 @@ export interface SimFx {
   onBladeBounce(b: BladeLike): void;
   onFinish(score: number, wave: number): void;
   onDeath(): void;
+  onCheckpoint?(save: SimCheckpoint): void;
 }
 
 export interface Shot {
@@ -223,6 +227,17 @@ export interface RunStats {
 export interface Best {
   score: number;
   wave: number;
+}
+
+export interface SimCheckpoint {
+  version: 1;
+  seed: number;
+  rngState: number;
+  wave: number;
+  score: number;
+  combo: number;
+  hp: number;
+  stats: RunStats;
 }
 
 export type SimMode = 'playing' | 'dying' | 'over';

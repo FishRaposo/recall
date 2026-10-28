@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Sim } from '../src/core/sim.ts';
-import { ENEMIES, createEnemy, Darter } from '../src/content/enemies.ts';
+import { ENEMIES, createEnemy, Darter, Shell } from '../src/content/enemies.ts';
 import { ARENA } from '../src/core/config.ts';
-import type { EnemyLike, SimFx, SimInput, Vec } from '../src/core/types.ts';
+import type { EnemyLike, SimCheckpoint, SimFx, SimInput, Vec } from '../src/core/types.ts';
 
 function fakeInput(): SimInput & { queue: Array<'throw' | 'dash'>; aim: Vec } {
   const input = {
@@ -22,9 +22,10 @@ function fakeInput(): SimInput & { queue: Array<'throw' | 'dash'>; aim: Vec } {
   return input;
 }
 
-function fakeFx(): SimFx & { finished: boolean } {
+function fakeFx(): SimFx & { finished: boolean; checkpoint: SimCheckpoint | null } {
   const fx = {
     finished: false,
+    checkpoint: null as SimCheckpoint | null,
     sfx: {
       throw() {}, recall() {}, bounce() {}, hit() {}, kill() {}, catch() {}, catchSoft() {}, whiff() {},
       dash() {}, hurt() {}, spawn() {}, shoot() {}, clink() {}, wave() {}, clear() {}, heal() {}, gameOver() {},
@@ -37,6 +38,7 @@ function fakeFx(): SimFx & { finished: boolean } {
     onBladeBounce() {},
     onFinish() { fx.finished = true; },
     onDeath() {},
+    onCheckpoint(save: SimCheckpoint) { fx.checkpoint = save; },
   };
   return fx;
 }
@@ -114,4 +116,78 @@ test('the same simulation seed produces the same run', () => {
     return out;
   };
   assert.deepEqual(run(12), run(12));
+});
+
+test('a shell deflects the outbound blade from the front', () => {
+  const { sim, input } = setup();
+  sim.player.x = 700;
+  const shell = createEnemy('shell', 500, 290, sim, true) as Shell;
+  shell.faceLock = true;
+  shell.faceX = 1;
+  shell.faceY = 0;
+  sim.enemies.push(shell);
+  input.aim = [-1, 0];
+  input.queue.push('throw');
+  let deflected = false;
+  for (let i = 0; i < 40; i++) {
+    sim.tick(1 / 60);
+    if (sim.blade.state === 'out' && sim.blade.speed < 800) {
+      deflected = true;
+      break;
+    }
+    if (sim.blade.state === 'held') break;
+  }
+  assert.ok(deflected, 'the plate slowed the outbound blade');
+  assert.equal(shell.hp, shell.maxHp, 'front plate took no damage');
+});
+
+test('a shell takes damage from the return leg after a front deflect', () => {
+  const { sim, input } = setup();
+  const shell = createEnemy('shell', 500, 290, sim, true) as Shell;
+  shell.faceLock = true;
+  shell.faceX = -1;
+  shell.faceY = 0;
+  sim.enemies.push(shell);
+  input.aim = [1, 0];
+  input.queue.push('throw');
+  for (let i = 0; i < 30; i++) sim.tick(1 / 60);
+  input.queue.push('throw');
+  for (let i = 0; i < 300; i++) {
+    sim.tick(1 / 60);
+    if (sim.blade.state === 'held') break;
+  }
+  assert.ok(shell.hp < shell.maxHp, 'return leg got through the plate');
+});
+
+test('a shell takes damage from behind', () => {
+  const { sim, input } = setup();
+  const shell = createEnemy('shell', 500, 290, sim, true) as Shell;
+  shell.faceLock = true;
+  shell.faceX = 1;
+  shell.faceY = 0;
+  sim.enemies.push(shell);
+  input.aim = [1, 0];
+  input.queue.push('throw');
+  for (let i = 0; i < 300; i++) {
+    sim.tick(1 / 60);
+    if (shell.hp < shell.maxHp || sim.blade.state === 'held') break;
+  }
+  assert.ok(shell.hp < shell.maxHp, 'back hit damaged the shell');
+});
+
+test('a wave checkpoint resumes the same wave and RNG state', () => {
+  const fx = fakeFx();
+  const sim = new Sim({ catalog: ENEMIES, spawn: createEnemy, input: fakeInput(), fx });
+  sim.newRun(42);
+  assert.ok(fx.checkpoint);
+  const cp = fx.checkpoint;
+  const resumedFx = fakeFx();
+  const resumed = new Sim({ catalog: ENEMIES, spawn: createEnemy, input: fakeInput(), fx: resumedFx });
+  resumed.resume(cp);
+  assert.equal(resumed.seed, cp.seed);
+  assert.equal(resumed.wave, cp.wave);
+  assert.equal(resumed.score, cp.score);
+  assert.equal(resumed.player.hp, cp.hp);
+  assert.equal(resumed.rng.state, sim.rng.state);
+  assert.deepEqual(resumed.groups, sim.groups);
 });

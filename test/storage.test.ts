@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { loadBest, saveBest } from '../src/platform/storage.ts';
+import { loadBest, saveBest, loadSave, saveRun, clearRunSave } from '../src/platform/storage.ts';
+import type { RecallSave } from '../src/platform/storage.ts';
 import { loadSettings, saveSettings, defaultSettings } from '../src/platform/settings.ts';
 
 class MemoryStorage {
@@ -41,4 +42,26 @@ test('legacy mute preference migrates into settings', () => {
   const storage = installStorage();
   storage.setItem('recall.muted.v1', '1');
   assert.equal(loadSettings().muted, true);
+});
+
+test('a wave checkpoint round-trips and invalid saves are discarded', () => {
+  const storage = installStorage();
+  const save: RecallSave = {
+    version: 1,
+    seed: 42,
+    rngState: 123456,
+    wave: 3,
+    score: 700,
+    combo: 5,
+    hp: 2,
+    stats: { kills: 17, bestMult: 3, time: 61.5 },
+  };
+  saveRun(save);
+  assert.deepEqual(loadSave(), save);
+  clearRunSave();
+  assert.equal(loadSave(), null);
+  storage.setItem('recall.save.v1', JSON.stringify({ version: 2 }));
+  assert.equal(loadSave(), null);
+  storage.setItem('recall.save.v1', '{');
+  assert.equal(loadSave(), null);
 });

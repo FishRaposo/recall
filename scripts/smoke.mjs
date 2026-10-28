@@ -126,6 +126,16 @@ for (const name of names) {
     await page.waitForSelector('dialog', { state: 'detached' });
     expect(await page.evaluate(() => window.__recall.state) === 'playing', 'did not resume after pause');
 
+    step = 'save and continue';
+    expect(await page.evaluate(() => !!localStorage.getItem('recall.save.v1')), 'wave checkpoint was not saved');
+    await page.reload();
+    await waitReady(page);
+    await page.waitForFunction(() => window.__recall.state === 'title', undefined, { timeout: 5000 });
+    expect(await page.locator('#continue-btn').isVisible(), 'continue button is not visible with a save');
+    await page.click('#continue-btn');
+    await waitState(page, 'playing');
+    expect(await page.evaluate(() => window.__recall.wave) >= 1, 'continue did not restore a wave');
+
     step = 'death and restart';
     await page.evaluate(() => {
       const g = window.__recall;
@@ -182,7 +192,7 @@ for (const name of names) {
     console.error(`FAIL ${name}`);
     for (const error of errors) console.error(`      ${error}`);
   } else {
-    console.log(`ok   ${name}: title, settings, wave, move, throw, pause, death/restart, touch drag/throw`);
+    console.log(`ok   ${name}: title, settings, wave, move, throw, pause, save/continue, death/restart, touch drag/throw`);
   }
 }
 

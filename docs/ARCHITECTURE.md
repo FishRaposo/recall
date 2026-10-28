@@ -15,7 +15,7 @@ A one-blade arcade game. The blade's catch is the combo meter, enemies arrive in
 | `src/core/blade.ts` | held / out / return state machine and swept sweep hookup | no |
 | `src/core/waves.ts` | Budgeted roster and timed spawn groups | no |
 | `src/core/sim.ts` | The run loop: waves, spawn, collision, scoring, combo, hitstop, death | no |
-| `src/content/enemies.ts` | The enemy catalog: stats, behaviour, drawing, factory | no* |
+| `src/content/enemies.ts` | The enemy catalog: stats, behaviour, the Shell's plate hook, drawing, factory | no* |
 | `src/platform/input.ts` | Keyboard, mouse, touch and gamepad behind `SimInput` | yes |
 | `src/platform/audio.ts` | Synthesized WebAudio and volume/mute | yes |
 | `src/platform/storage.ts` | Guarded best score | yes |
@@ -43,9 +43,13 @@ Dependency rule, enforced by `scripts/check-boundaries.mjs`:
 - a **catalog** (`ENEMIES`) for wave composition and spawn radii;
 - a **spawn factory** (`createEnemy`) so core never imports content;
 - an **input** object (`SimInput`) with `moveVector`, `aimDir`, `consume`, `held`;
-- a **`SimFx`** object with `sfx`, `ink`, `particles`, `floaters`, `shake`, `flash`, `onBladeBounce`, `onFinish`, `onDeath`.
+- a **`SimFx`** object with `sfx`, `ink`, `particles`, `floaters`, `shake`, `flash`, `onBladeBounce`, `onFinish`, `onDeath`, `onCheckpoint`.
 
 `tick(realDt)` applies hitstop or advances the simulation, and the shell consumes the effects as they happen. Tests instantiate `Sim` with a scripted input and no-op effects; the browser supplies the real input and effects. This is why the core loop is testable without a browser harness.
+
+At each wave start the sim emits a `SimCheckpoint` through `SimFx.onCheckpoint`: seed, RNG state, wave, score, combo, HP and stats. The shell persists it as `recall.save.v1`; `Sim.resume` restores the RNG state before rebuilding the wave, so the same wave composition comes back. A new run or death clears the save.
+
+The Shell's front plate is a catalog hook (`EnemyDef.onBladeHit`) rather than a branch in `bladeSweep`: the hook sees the blade state and travel direction, returns `deflect`, and the sim slows the blade without damaging the enemy. The same hook leaves return-leg and back hits as normal damage.
 
 The browser `Game` exposes the same surface the checks use: `player`, `blade`, `enemies`, `newEnemies`, `wave`, `waveState`, `groups`, `waveLock`, `hitstop`, `score`, `combo`, `mult`, `floaters`, `tick`, `newRun`, and `onBladeBounce`.
 
@@ -69,3 +73,4 @@ The browser `Game` exposes the same surface the checks use: `player`, `blade`, `
 - GitHub Pages uploads `index.html` + `dist/`; the itch zip has the same layout at its root.
 - `scripts/check-dist.mjs` rejects bad imports; `scripts/check-module-graph.mjs` proves the artifact under `/recall/`.
 - `npm run smoke` runs a real journey in Chromium, Firefox and WebKit; `npm run a11y` scans the DOM overlays.
+- `npm run test:coverage` enforces the 75% line floor.

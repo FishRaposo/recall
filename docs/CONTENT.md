@@ -6,11 +6,16 @@
 2. Add one `EnemyDef` to `src/content/enemies.ts`: radius, hp, points, cost, unlock wave, weight, knockback, note and speed function.
 3. Add a class extending `Enemy` with `think(dt, world)` and `drawBody(ctx)`, or reuse an existing behaviour.
 4. Add it to `createEnemy` in the same file.
-5. Add a wave test that proves it appears in its debut wave and never before.
-6. Add a headless sim test for its behaviour.
-7. The banner note comes from the catalog; no second copy is needed.
+5. If it needs to react to the blade before damage, add `onBladeHit(enemy, dx, dy, world)` to the catalog; return `'deflect'` to stop the hit and slow the blade, or `'damage'` for the normal path. The Shell uses this.
+6. Add a wave test that proves it appears in its debut wave and never before.
+7. Add a headless sim test for its behaviour.
+8. The banner note comes from the catalog; no second copy is needed.
 
 The wave composer derives its budget, unlocks and weights from the catalog, so there is no separate `ENEMY_COST`/`UNLOCK_WAVE` table to update.
+
+## Shell pattern
+
+The Shell (wave 6) is a front-plate enemy: `onBladeHit` sees `world.blade.state`; an outbound blade hitting the face returns `'deflect'`, while the return leg or a back hit returns `'damage'`. This keeps the branch in content, not in `Sim.bladeSweep`.
 
 ## Change a wave
 
