@@ -2,6 +2,12 @@
 
 All notable changes to Recall are recorded here. The format follows Keep a Changelog; versions follow SemVer.
 
+## [1.3.1] — 2026-10-28
+
+### Fixed
+
+- `AudioContext.resume()` rejections during a page navigation are caught instead of surfacing as a Firefox console error during the save/continue smoke journey.
+
 ## [1.3.0] — 2026-10-28
 
 ### Added

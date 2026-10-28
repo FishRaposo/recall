@@ -39,7 +39,7 @@ export class Sfx implements SfxLike {
       const data = this.noiseBuf.getChannelData(0);
       for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
     }
-    if (this.ctx.state === 'suspended') void this.ctx.resume();
+    if (this.ctx.state === 'suspended') this.ctx.resume().catch(() => { /* page may be navigating */ });
   }
 
   get live(): boolean {
