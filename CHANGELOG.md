@@ -2,7 +2,7 @@
 
 All notable changes to Recall are recorded here. The format follows Keep a Changelog; versions follow SemVer.
 
-## [1.1.0] — 2026-10-28
+## [1.2.0] — 2026-10-28
 
 ### Added
 
@@ -34,6 +34,10 @@ All notable changes to Recall are recorded here. The format follows Keep a Chang
 - 26 unit tests, including a headless simulation suite (wave flow, collision, combo, darter lock, determinism).
 - Six task checks: every bug fails before and passes after; both features fail before and pass after.
 - Three browser journeys and axe clean at the WCAG A/AA level.
+
+## [1.1.0] — 2026-10-27
+
+- Previous tagged release. The package metadata still said 1.0.0; the 1.2.0 rebuild supersedes it.
 
 ## [1.0.0] — 2026-10-27
 
