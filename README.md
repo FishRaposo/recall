@@ -10,7 +10,7 @@ Designed and built with AI assistance (Claude) to Vinícius Raposo's brief, then
 
 **Project page:** [fishraposo.github.io/projects/recall.html](https://fishraposo.github.io/projects/recall.html)
 
-**Play:** [in the browser](https://fishraposo.github.io/recall/), or run it locally:
+**Play:** [on itch.io](https://fishraposo.itch.io/recall) or [the GitHub Pages build](https://fishraposo.github.io/recall/), both in the browser, or run it locally:
 
 ```bash
 git clone https://github.com/FishRaposo/recall.git
