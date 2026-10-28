@@ -40,7 +40,7 @@ The fix rotates the heading by a fraction of the signed angle to the target (no 
 
 ## How it was tested
 
-- 26 unit tests under `node --test`: blade homing (stationary and moving player, early recall, arena bounds), wave budgets, unlock order, determinism under a fixed seed, swept collision, frame-rate independence, saves/settings, and a headless simulation suite that runs the real run loop in Node with injected input and effects.
+- 31 unit tests under `node --test`: blade homing (stationary and moving player, early recall, arena bounds), wave budgets, unlock order, determinism under a fixed seed, swept collision, frame-rate independence, saves/settings, the Shell's front plate/return/back behaviour, wave checkpoint resume, and a headless simulation suite that runs the real run loop in Node with injected input and effects.
 - Browser journeys in Chromium, Firefox and WebKit: title, settings, a live wave, keyboard movement, a throw, pause/resume, death/restart, and a mobile touch drag and throw. Each fails on any console error, page error or failed request. An axe scan covers the title, settings, pause and game-over DOM overlays.
 - The six task checks run against the built game in Chromium; every bug fails before and passes after, and both features fail before and pass after.
 
