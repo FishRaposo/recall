@@ -28,7 +28,11 @@ One weapon, and it leaves your hand. A boomerang-style blade forces a decision o
 
 **Hitstop would eat inputs, so inputs are buffered.** A click during a 120 ms freeze would land on a frame where the simulation doesn't run and then be cleared. Throw and dash presses stay live for 150 ms and are consumed by whichever update runs next.
 
-**The art direction is a constraint too.** Ink on paper with one accent color (vermilion for the blade and for danger) keeps every frame readable: anything red either belongs to you or is about to hurt you. Kills stamp ink into a separate floor canvas that is never cleared during a run, so the arena records the fight and the game-over screen can export it.
+**The art direction is a constraint too.** Ink on paper keeps every frame readable: black is destruction, vermilion is the blade and player damage, yellow is a double tap and blue is a pickup. Movement and enemy trails use a neutral graphite so they never read as events. Kills stamp ink into a separate floor canvas that is never cleared during a run, so the arena records the fight and the game-over screen can export it.
+
+**The Roguelike expansion keeps the same constraint.** No new weapons: the draft only changes throw speed, recall steering, catch radius, dash, blade geometry, enemy interaction or combo. Random pickups add temporary buffs, pigment and hearts. There is no meta progression; every run starts from the same baseline, and only Arcade keeps its wave checkpoint and Continue. The run reset clears techniques, pigment, buffs, pickups, draft and modifiers.
+
+**Ink has a grammar now.** A kill is a round black blot, damage is a red directional spray, a double tap is a thin yellow streak with a star, and a pickup is a small blue ring or dot. Shapes carry the meaning, so the painting still reads in grayscale.
 
 ## The bug that almost shipped
 
@@ -40,8 +44,8 @@ The fix rotates the heading by a fraction of the signed angle to the target (no 
 
 ## How it was tested
 
-- 31 unit tests under `node --test`: blade homing (stationary and moving player, early recall, arena bounds), wave budgets, unlock order, determinism under a fixed seed, swept collision, frame-rate independence, saves/settings, the Shell's front plate/return/back behaviour, wave checkpoint resume, and a headless simulation suite that runs the real run loop in Node with injected input and effects.
-- Browser journeys in Chromium, Firefox and WebKit: title, settings, a live wave, keyboard movement, a throw, pause/resume, death/restart, and a mobile touch drag and throw. Each fails on any console error, page error or failed request. An axe scan covers the title, settings, pause and game-over DOM overlays.
+- 42 unit tests under `node --test`: blade homing (stationary and moving player, early recall, arena bounds), wave budgets, unlock order, determinism under a fixed seed, swept collision, frame-rate independence, saves/settings, the Shell's front plate/return/back behaviour, wave checkpoint resume, double-tap detection and its window, pickup collection/expiry, buff modifiers, draft determinism/rerolls/skip, the run reset, painting titles, and a headless simulation suite that runs the real run loop in Node with injected input and effects.
+- Browser journeys in Chromium, Firefox and WebKit: title, settings, a live wave, keyboard movement, a throw, pause/resume, death/restart, mobile touch drag and throw, and a Roguelike wave-clear draft/pickup journey. Each fails on any console error, page error or failed request. An axe scan covers the title, settings, pause, game-over and draft DOM overlays.
 - The six task checks run against the built game in Chromium; every bug fails before and passes after, and both features fail before and pass after.
 
 ## What would change with more time

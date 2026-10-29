@@ -14,9 +14,9 @@ const problems = [];
 page.on('pageerror', (e) => problems.push(`pageerror: ${e.message}`));
 page.on('console', (m) => { if (m.type() === 'error') problems.push(`console: ${m.text()}`); });
 
-async function scan(label) {
-  await page.addScriptTag({ path: resolve(root, 'node_modules/axe-core/axe.min.js') });
-  const result = await page.evaluate(async () => {
+async function scan(label, target = page) {
+  await target.addScriptTag({ path: resolve(root, 'node_modules/axe-core/axe.min.js') });
+  const result = await target.evaluate(async () => {
     const axe = window.axe;
     return axe.run(document, { runOnly: ['wcag2a', 'wcag2aa'] });
   });
@@ -52,6 +52,30 @@ await page.evaluate(() => {
 });
 await page.waitForFunction(() => window.__recall.state === 'over', undefined, { timeout: 5000 });
 await scan('game over');
+
+const draftPage = await context.newPage();
+draftPage.on('pageerror', (e) => problems.push(`pageerror: ${e.message}`));
+draftPage.on('console', (m) => { if (m.type() === 'error') problems.push(`console: ${m.text()}`); });
+await draftPage.goto(`${base}/index.html`);
+await draftPage.waitForFunction(() => !!window.__recall, undefined, { timeout: 15000 });
+await draftPage.evaluate(() => { try { localStorage.clear(); } catch { /* ignore */ } });
+await draftPage.reload();
+await draftPage.waitForFunction(() => !!window.__recall, undefined, { timeout: 15000 });
+await draftPage.click('#roguelike-btn');
+await draftPage.waitForFunction(() => window.__recall.state === 'playing', undefined, { timeout: 5000 });
+await draftPage.evaluate(() => {
+  const g = window.__recall;
+  g.player.invuln = 999;
+  g.sim.waveState = 'fight';
+  g.sim.groups = [];
+  g.sim.enemies = [];
+  g.sim.newEnemies = [];
+  g.sim.waveLock = false;
+});
+await draftPage.waitForSelector('dialog[open]', { timeout: 5000 });
+await scan('draft dialog', draftPage);
+await draftPage.locator('.draft-card').first().click();
+await draftPage.close();
 
 await context.close();
 await browser.close();

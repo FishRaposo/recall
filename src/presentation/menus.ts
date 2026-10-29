@@ -2,10 +2,18 @@
 // carry focus, labels and announcements so keyboard and screen-reader users can operate them.
 
 import type { Settings } from '../platform/settings.ts';
+import type { TechniqueDef } from '../core/types.ts';
 
 export interface SettingsHandlers {
   onChange: (settings: Settings) => void;
   onFullscreen: () => void;
+}
+
+export interface DraftHandlers {
+  onPick: (id: string) => void;
+  onReroll: () => void;
+  onSkip: () => void;
+  onSettings: () => void;
 }
 
 export interface PauseHandlers extends SettingsHandlers {
@@ -81,7 +89,7 @@ export class Menus {
     return frag;
   }
 
-  private open(title: string, body: Node, actions: HTMLElement[], onClose?: () => void): void {
+  private open(title: string, body: Node, actions: HTMLElement[], onClose?: () => void, onCancel?: () => void): void {
     this.close();
     this.returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const dialog = document.createElement('dialog');
@@ -101,6 +109,12 @@ export class Menus {
       this.returnFocus?.focus();
       onClose?.();
     });
+    if (onCancel) {
+      dialog.addEventListener('cancel', (event) => {
+        event.preventDefault();
+        onCancel();
+      });
+    }
     this.root.append(dialog);
     this.dialog = dialog;
     dialog.showModal();
@@ -134,5 +148,61 @@ export class Menus {
     close.textContent = 'Close';
     close.addEventListener('click', () => this.close());
     this.open('Settings', body, [close], onClose);
+  }
+
+  openDraft(cards: TechniqueDef[], pigment: number, cost: number, handlers: DraftHandlers): void {
+    const body = document.createElement('div');
+    body.className = 'draft-cards';
+    for (const card of cards) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'draft-card';
+      button.setAttribute('aria-label', `${card.name}, ${card.rarity} ${card.tag}. ${card.blurb}`);
+      const name = document.createElement('strong');
+      name.textContent = card.name;
+      const meta = document.createElement('span');
+      meta.className = 'draft-meta';
+      meta.textContent = `${card.rarity} · ${card.tag} · max ${card.maxStacks}`;
+      const blurb = document.createElement('span');
+      blurb.className = 'draft-blurb';
+      blurb.textContent = card.blurb;
+      button.append(name, meta, blurb);
+      button.addEventListener('click', () => {
+        this.close();
+        handlers.onPick(card.id);
+      });
+      body.append(button);
+    }
+    if (!cards.length) {
+      const empty = document.createElement('p');
+      empty.textContent = 'No techniques left. Skip for pigment.';
+      body.append(empty);
+    }
+
+    const reroll = document.createElement('button');
+    reroll.type = 'button';
+    reroll.textContent = `Reroll (${cost} pigment)`;
+    reroll.disabled = pigment < cost;
+    reroll.addEventListener('click', () => {
+      this.close();
+      handlers.onReroll();
+    });
+    const skip = document.createElement('button');
+    skip.type = 'button';
+    skip.textContent = 'Skip (+2 pigment)';
+    skip.addEventListener('click', () => {
+      this.close();
+      handlers.onSkip();
+    });
+    const settings = document.createElement('button');
+    settings.type = 'button';
+    settings.textContent = 'Settings';
+    settings.addEventListener('click', () => {
+      this.close();
+      handlers.onSettings();
+    });
+
+    this.announce('Wave cleared. Choose a technique.');
+    this.open('Wave cleared', body, [skip, reroll, settings], undefined, () => handlers.onSettings());
   }
 }

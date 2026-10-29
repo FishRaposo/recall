@@ -17,6 +17,24 @@ The wave composer derives its budget, unlocks and weights from the catalog, so t
 
 The Shell (wave 6) is a front-plate enemy: `onBladeHit` sees `world.blade.state`; an outbound blade hitting the face returns `'deflect'`, while the return leg or a back hit returns `'damage'`. This keeps the branch in content, not in `Sim.bladeSweep`.
 
+## Add a technique
+
+1. Add a `TechniqueDef` to `src/content/techniques.ts`: id, name, tag, rarity, maxStacks, minWave, blurb and `mods`.
+2. Use existing `Mods` keys. If the effect needs a new key, add it in `src/core/types.ts`, apply it where the entity reads it, and cap it in `src/core/run.ts`.
+3. The draft filters by `minWave` and `maxStacks` and weights by rarity; no second table is needed.
+4. Add a test for the modifier math or draft eligibility in `test/roguelike.test.ts`.
+
+## Add a pickup
+
+1. Add a `PickupDef` to `src/content/pickups.ts`: id, name, note, kind, weight, minWave, lifetime, color and effect.
+2. A buff uses a `BuffDef` with `Mods`; pigment, heal and dash-refill are data fields.
+3. Pickups spawn only in Roguelike. They are blue on **collection**; spawning one never stamps the floor.
+4. Add a test for collection, effect expiry or the spawn constraints.
+
+## Ink events
+
+`InkLike` exposes `kill`, `hurt`, `death`, `doubleTap`, `pickup` and `motion`. Use the semantic method that matches the event; do not pass a raw color from core. The palette and shape rules live in `src/core/config.ts` and `src/presentation/fx.ts`.
+
 ## Change a wave
 
 - `waveBudget(n)` and the heavy-wave multiplier live in `src/core/waves.ts`.

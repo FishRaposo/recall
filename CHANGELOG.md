@@ -2,6 +2,28 @@
 
 All notable changes to Recall are recorded here. The format follows Keep a Changelog; versions follow SemVer.
 
+## [Unreleased]
+
+### Added
+
+- Roguelike mode: a three-card technique draft at every wave clear, run-only pigment, temporary pickups (buff, pigment, heal, dash refill) and a full run reset. No meta progression and no save; Arcade keeps its checkpoint.
+- Semantic ink grammar: black kills, red damage, yellow double-tap streaks, blue pickup marks and neutral motion trails. `InkLike` exposes `kill`, `hurt`, `death`, `doubleTap`, `pickup` and `motion`.
+- Double-tap detection in `Blade.registerHit` and `Sim.onDoubleTap`, with a run stat and yellow floor ink.
+- Technique and pickup registries (`content/techniques.ts`, `content/pickups.ts`) and pure draft/modifier helpers (`core/run.ts`).
+- Seeded painting titles (`core/painting.ts`), a 1.4 s painting reveal, and PNG export/share. `S` saves, `V` shares via Web Share when supported and otherwise downloads, `C` copies the title/seed.
+- Title mode select for Arcade and Roguelike; `T` returns to the title from the results panel.
+
+### Changed
+
+- Arcade checkpoints remain Arcade-only; Roguelike never reads or writes `recall.save.v1`.
+- Dash charges, dash-cooldown and movement modifiers; the HUD shows pigment, buff timers and extra dash pips in Roguelike.
+- The game-over panel reports the mode, double taps, techniques picked and painting title.
+
+### Tests
+
+- 42 unit tests: the existing suite plus double-tap window, pickups, buff expiry, draft determinism/rerolls/skip, run reset and painting titles.
+- Smoke journeys include a Roguelike draft/pickup path in Chromium, Firefox and WebKit; the axe scan includes the draft dialog.
+
 ## [1.3.1] — 2026-10-28
 
 ### Fixed

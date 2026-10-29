@@ -17,6 +17,15 @@ export const COLORS = {
   grey: '#958c7c',
 } as const;
 
+// Semantic floor-ink palette. Render colors stay in COLORS.
+export const INK = {
+  kill: '#1d1b1a',
+  hurt: '#d9402b',
+  doubleTap: '#c9971f',
+  pickup: '#2f5fa8',
+  motion: '#6b6252',
+} as const;
+
 export const FONT = {
   serif: '"Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif',
   mono: 'ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace',
@@ -50,6 +59,22 @@ export const INPUT_BUFFER = 0.15; // seconds a press stays "live" (survives hits
 
 export const MULT_CAP = 8;
 export const CATCHES_PER_MULT = 2;
+
+export const DOUBLE_TAP_WINDOW = 0.5;
+
+export const PICKUP = {
+  firstDelay: 6,
+  minGap: 11,
+  maxGap: 16,
+  maxActive: 2,
+  lifetime: 12,
+} as const;
+
+export const DRAFT = {
+  cards: 3,
+  rerollBase: 3,
+  skipPigment: 2,
+} as const;
 
 export const INTRO_TIME = 1.7;
 export const SPAWN_TIME = 0.75;

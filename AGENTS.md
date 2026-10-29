@@ -23,14 +23,14 @@ Node 24 LTS is required. Runtime dependencies stay at zero; TypeScript, Playwrig
 ## Layout
 
 ```
-src/core/         simulation, player/blade, waves, config, utilities (no DOM)
-src/content/      the enemy catalog and behaviours
+src/core/         simulation, player/blade, waves, run modifiers/draft, painting titles, config, utilities (no DOM)
+src/content/      enemy, technique and pickup catalogs and behaviours
 src/platform/     input, audio, storage, settings
-src/presentation/ renderer, HUD, effects, accessible dialogs
+src/presentation/ HUD, effects, pickups, accessible dialogs
 src/main.ts       composition root: input, screens, effects, saving the painting
 src/harness.ts    deterministic ?harness surface
 test/             node:test suites, including the headless simulation
-tasks/            task pack and verifier
+tasks/            the task pack and verifier
 scripts/          build, serve, smoke, a11y, package, release
 ```
 
@@ -43,7 +43,10 @@ Dependency rule, enforced by `scripts/check-boundaries.mjs`: `core` imports only
 - Enemy radius, cost, unlock wave, points, knockback, speed and behaviour live once in `src/content/enemies.ts`. The wave composer reads the catalog; do not add a second stat table. Blade reactions use `EnemyDef.onBladeHit` (the Shell pattern).
 - Inputs stay buffered for 150 ms across hitstop.
 - Darter wind-up aim is locked; splitter children keep a wave open; the blade can hit each enemy once per leg.
-- Wave checkpoints save seed, RNG state, wave, score, combo, HP and stats; `Sim.resume` must rebuild the same wave. A new run or death clears the save.
+- **Arcade-only checkpoints.** Arcade saves seed, RNG state, wave, score, combo, HP and stats; `Sim.resume` rebuilds the same wave. Roguelike never emits a checkpoint and never reads or writes `recall.save.v1`. A new Arcade run or death clears the save.
+- **Ink is semantic.** Core calls `InkLike.kill`, `hurt`, `death`, `doubleTap`, `pickup` or `motion`; it never passes a raw color. The palette lives in `config.ts`.
+- **Double tap** is the same enemy on both legs inside `DOUBLE_TAP_WINDOW`; `Blade.registerHit` detects it and `Sim.onDoubleTap` applies the effects once.
+- **Run data stays in registries.** Techniques live in `content/techniques.ts`, pickups in `content/pickups.ts`; `core/run.ts` computes modifiers and draws drafts. New content must not require a second stat table.
 - Task checks must fail before and pass after. Do not weaken a check to make a refactor pass.
 
 ## Task pack

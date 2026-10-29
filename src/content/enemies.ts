@@ -102,11 +102,12 @@ abstract class Enemy implements EnemyLike {
     if (this.y > a.y + a.h - r) { this.y = a.y + a.h - r; this.vy = -Math.abs(this.vy) * 0.4; }
   }
 
-  hit(dx: number, dy: number, g: EnemyWorld): void {
-    this.hp -= 1;
+  hit(dx: number, dy: number, g: EnemyWorld, damage = 1): void {
+    this.hp -= damage;
     this.flash = 0.09;
-    this.vx += dx * this.def.knock;
-    this.vy += dy * this.def.knock;
+    const knock = this.def.knock * (1 + (g.mods?.knockbackPct ?? 0));
+    this.vx += dx * knock;
+    this.vy += dy * knock;
     if (this.hp <= 0) {
       this.dead = true;
       this.onDeath(g, dx, dy);
@@ -271,7 +272,7 @@ export class Darter extends Enemy {
         }
         break;
       case 'dash':
-        g.ink.dot(this.x, this.y, 2.5, COLORS.ink, 0.12);
+        g.ink.motion(this.x, this.y, 2.5, 0.12);
         if (this.stateT <= 0) {
           this.state = 'rest';
           this.stateT = 0.75;

@@ -16,7 +16,7 @@ export class Blade implements BladeLike {
   vy = 0;
   speed = 0;
   angle = 0;
-  r = BLADE.r;
+  r: number = BLADE.r;
   flightHits = 0;
   hitSet = new Set<EnemyLike>(); // each enemy can be struck once per leg (out, then again on return)
   hadTargets = false;
@@ -35,6 +35,9 @@ export class Blade implements BladeLike {
 
   update(dt: number, g: BladeWorld): void {
     const p = this.p;
+    const mods = g.mods;
+    this.r = BLADE.r + (mods?.bladeRadiusPx ?? 0) + (mods?.catchPadPx ?? 0);
+    if (this.state !== 'held') this.flightT += dt;
 
     if (this.state === 'held') {
       const tx = p.x + p.faceX * (p.r + 9);
@@ -53,7 +56,7 @@ export class Blade implements BladeLike {
     const py = this.y;
 
     if (this.state === 'out') {
-      this.speed -= BLADE.decel * dt;
+      this.speed -= BLADE.decel * (1 + (mods?.throwDecelPct ?? 0)) * dt;
       if (this.speed <= BLADE.minSpeed) {
         this.speed = BLADE.minSpeed;
         this.turnHome(g, false);
@@ -62,7 +65,10 @@ export class Blade implements BladeLike {
       this.vx = dx * this.speed;
       this.vy = dy * this.speed;
     } else {
-      this.speed = Math.min(this.speed + BLADE.returnAccel * dt, BLADE.returnMax);
+      this.speed = Math.min(
+        this.speed + BLADE.returnAccel * (1 + (mods?.returnAccelPct ?? 0)) * dt,
+        BLADE.returnMax * (1 + (mods?.returnSpeedPct ?? 0)),
+      );
       // Steer by rotating the heading, not by blending vectors: blending a heading with its
       // exact opposite cancels out, so a blade turning home from straight ahead would never turn.
       // The turn rate also tightens as the blade closes in, or a fast blade can orbit the player.
@@ -72,7 +78,7 @@ export class Blade implements BladeLike {
       const target = Math.atan2(dy, dx);
       const heading = this.vx || this.vy ? Math.atan2(this.vy, this.vx) : target;
       const diff = Math.atan2(Math.sin(target - heading), Math.cos(target - heading));
-      const k = 1 - Math.exp(-BLADE.steer * (1 + 160 / Math.max(d, 1)) * dt);
+      const k = 1 - Math.exp(-BLADE.steer * (1 + (mods?.steerPct ?? 0)) * (1 + 160 / Math.max(d, 1)) * dt);
       const a = heading + diff * k;
       this.vx = Math.cos(a) * this.speed;
       this.vy = Math.sin(a) * this.speed;
@@ -105,6 +111,8 @@ export class Blade implements BladeLike {
     this.hitSet.clear();
     this.trail.length = 0;
     this.banked = false;
+    this.flightT = 0;
+    this.outboundHits.clear();
     this.hadTargets = g.hasTargets();
     g.onThrow(this);
   }
@@ -128,7 +136,7 @@ export class Blade implements BladeLike {
     if (this.y < a.y + this.r) { this.y = a.y + this.r; this.vy = Math.abs(this.vy); hit = true; }
     if (this.y > a.y + a.h - this.r) { this.y = a.y + a.h - this.r; this.vy = -Math.abs(this.vy); hit = true; }
     if (hit) {
-      this.speed *= BLADE.bounce;
+      this.speed *= Math.min(0.98, BLADE.bounce + (g.mods?.bouncePct ?? 0));
       this.banked = true;
       g.onBladeBounce(this);
     }
@@ -147,7 +155,26 @@ export class Blade implements BladeLike {
     this.speed = 0;
     this.vx = 0;
     this.vy = 0;
+    this.outboundHits.clear();
     g.onCatch(hits, hadTargets);
+  }
+
+  flightT = 0;
+  outboundHits = new Map<EnemyLike, number>();
+
+  // Called by the simulation for every damaging hit. Records the outbound leg and returns true
+  // when the same enemy is struck again on the return leg inside the double-tap window.
+  registerHit(e: EnemyLike, x1: number, y1: number, x2: number, y2: number, g: BladeWorld): boolean {
+    if (this.state === 'out') {
+      this.outboundHits.set(e, this.flightT);
+      return false;
+    }
+    if (this.state !== 'return') return false;
+    const at = this.outboundHits.get(e);
+    if (at === undefined) return false;
+    this.outboundHits.delete(e);
+    const window = (g.doubleTapWindow ?? 0.5) + (g.mods?.doubleTapWindowS ?? 0);
+    return this.flightT - at <= window;
   }
 
   draw(ctx: CanvasRenderingContext2D): void {

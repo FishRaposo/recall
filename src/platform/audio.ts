@@ -111,4 +111,22 @@ export class Sfx implements SfxLike {
   clear(): void { [0, 4, 7, 12].forEach((s, i) => this.tone('triangle', 523.25 * 2 ** (s / 12), 0, 0.2, 0.08, i * 0.07)); }
   heal(): void { [7, 12].forEach((s, i) => this.tone('sine', 523.25 * 2 ** (s / 12), 0, 0.25, 0.1, i * 0.1)); }
   gameOver(): void { [12, 7, 3, 0].forEach((s, i) => this.tone('triangle', 261.6 * 2 ** (s / 12), 0, 0.35, 0.1, i * 0.17)); }
+  pickup(kind: 'buff' | 'pigment' | 'heal'): void {
+    if (kind === 'pigment') {
+      this.tone('triangle', 880, 1320, 0.1, 0.07);
+    } else if (kind === 'heal') {
+      this.tone('sine', 660, 990, 0.16, 0.08);
+    } else {
+      this.tone('sine', 660, 990, 0.08, 0.08);
+      this.tone('triangle', 990, 1320, 0.1, 0.05, 0.04);
+    }
+  }
+  buffEnd(): void { this.tone('sine', 440, 220, 0.18, 0.06); }
+  pigment(): void { this.tone('triangle', 880, 1320, 0.1, 0.06); }
+  doubleTap(): void {
+    this.tone('square', 1200, 1800, 0.05, 0.06);
+    this.noise(0.04, 3000, 1800, 0.1, 1);
+  }
+  draft(): void { [0, 4, 7].forEach((s, i) => this.tone('triangle', 261.6 * 2 ** (s / 12), 0, 0.2, 0.06, i * 0.08)); }
+  pick(): void { this.tone('triangle', 523.25, 783.99, 0.12, 0.08); }
 }

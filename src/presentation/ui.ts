@@ -1,6 +1,6 @@
 import { W, H, ARENA, COLORS, FONT } from '../core/config.ts';
 import { TAU } from '../core/util.ts';
-import type { Best, PlayerLike, RunStats, WaveState } from '../core/types.ts';
+import type { Best, PlayerLike, RunMode, RunStats, WaveState } from '../core/types.ts';
 
 export interface UiGame {
   player: PlayerLike;
@@ -24,6 +24,11 @@ export interface UiGame {
   newBest: boolean;
   stats: RunStats;
   score: number;
+  runMode: RunMode;
+  pigment: number;
+  buffs: Array<{ name: string; remaining: number; duration: number }>;
+  techniques: Array<{ name: string; stacks: number }>;
+  paintingTitle: string;
 }
 
 export interface TextOptions {
@@ -85,7 +90,20 @@ export function drawHud(ctx: CanvasRenderingContext2D, g: UiGame): void {
     }
   }
 
-  if (g.sfx.muted) text(ctx, 'muted', 34 + 3 * 24 + 18, 26, { size: 11, font: FONT.mono, align: 'left', color: COLORS.grey });
+  if (g.runMode === 'roguelike') {
+    text(ctx, `pigment ${g.pigment}`, 34 + 3 * 24 + 18, 26, { size: 11, font: FONT.mono, align: 'left', color: '#2f5fa8' });
+    g.buffs.slice(0, 4).forEach((b, i) => {
+      text(ctx, `${b.name} ${Math.ceil(b.remaining)}s`, 36, ARENA.y + ARENA.h - 14 - i * 12, {
+        size: 9, font: FONT.mono, align: 'left', color: '#2f5fa8', alpha: 0.8,
+      });
+    });
+  }
+
+  if (g.sfx.muted) {
+    text(ctx, 'muted', 34 + 3 * 24 + 18 + (g.runMode === 'roguelike' ? 86 : 0), 26, {
+      size: 11, font: FONT.mono, align: 'left', color: COLORS.grey,
+    });
+  }
 }
 
 export function drawWaveBanner(ctx: CanvasRenderingContext2D, g: UiGame): void {
@@ -175,9 +193,9 @@ export function drawTitle(ctx: CanvasRenderingContext2D, g: UiGame): void {
     text(ctx, v, W / 2 + 14, y, { size: 13, font: FONT.mono, align: 'left' });
   });
 
-  text(ctx, 'click or tap to begin', W / 2, 466, { size: 18, style: 'italic', alpha: 0.55 + 0.45 * Math.sin(t * 3) });
+  text(ctx, 'click or tap for arcade', W / 2, 466, { size: 18, style: 'italic', alpha: 0.55 + 0.45 * Math.sin(t * 3) });
   text(ctx, `seed ${g.seed}  ·  Y copy`, W / 2, 516, { size: 11, font: FONT.mono, color: COLORS.grey });
-  if (g.best.score > 0) text(ctx, `best  ${fmt(g.best.score)}  ·  wave ${g.best.wave}`, W / 2, 496, { size: 12, font: FONT.mono, color: COLORS.grey });
+  if (g.best.score > 0) text(ctx, `arcade best  ${fmt(g.best.score)}  ·  wave ${g.best.wave}`, W / 2, 496, { size: 11, font: FONT.mono, color: COLORS.grey });
 }
 
 export function drawPause(ctx: CanvasRenderingContext2D): void {
@@ -191,33 +209,46 @@ export function drawPause(ctx: CanvasRenderingContext2D): void {
 }
 
 export function drawGameOver(ctx: CanvasRenderingContext2D, g: UiGame): void {
+  if (g.overT < 1.4) {
+    text(ctx, g.paintingTitle || 'untitled', W / 2, H - 16, {
+      size: 13, font: FONT.mono, color: COLORS.grey, alpha: Math.min(1, g.overT * 2),
+    });
+    return;
+  }
   const w = 440;
-  const h = 300;
+  const h = 340;
   const x = (W - w) / 2;
   const y = (H - h) / 2 + 6;
-  const a = Math.min(1, g.overT * 3);
+  const a = Math.min(1, (g.overT - 1.4) * 3);
   ctx.save();
   ctx.globalAlpha = a;
   panel(ctx, x, y, w, h);
-  text(ctx, 'the ink dries.', W / 2, y + 44, { size: 30, style: 'italic' });
-  text(ctx, fmt(g.score), W / 2, y + 100, { size: 46, font: FONT.mono, weight: 'bold' });
-  if (g.newBest) text(ctx, 'new best', W / 2, y + 134, { size: 13, font: FONT.mono, color: COLORS.red, weight: 'bold', spacing: 2 });
+  text(ctx, g.paintingTitle || 'untitled', W / 2, y + 18, { size: 12, font: FONT.mono, color: COLORS.grey });
+  text(ctx, 'the ink dries.', W / 2, y + 48, { size: 30, style: 'italic' });
+  text(ctx, fmt(g.score), W / 2, y + 96, { size: 46, font: FONT.mono, weight: 'bold' });
+  if (g.newBest) text(ctx, 'new best', W / 2, y + 126, { size: 13, font: FONT.mono, color: COLORS.red, weight: 'bold', spacing: 2 });
   const s = g.stats;
   const mins = Math.floor(s.time / 60);
   const secs = Math.floor(s.time % 60).toString().padStart(2, '0');
   const rows: Array<[string, string]> = [
-    ['wave', `${g.wave}`],
+    ['wave', `${g.wave} · ${g.runMode}`],
     ['kills', `${s.kills}`],
     ['top multiplier', `×${s.bestMult}`],
+    ['double taps', `${s.doubleTaps ?? 0}`],
     ['time', `${mins}:${secs}`],
   ];
   rows.forEach(([k, v], i) => {
-    const ry = y + 164 + i * 20;
+    const ry = y + 150 + i * 20;
     text(ctx, k, W / 2 - 10, ry, { size: 13, font: FONT.mono, align: 'right', color: COLORS.grey });
     text(ctx, v, W / 2 + 10, ry, { size: 13, font: FONT.mono, align: 'left' });
   });
+  if (g.techniques.length) {
+    const shown = g.techniques.slice(0, 4).map((t) => `${t.name} ×${t.stacks}`).join(' · ');
+    const more = g.techniques.length > 4 ? `  +${g.techniques.length - 4}` : '';
+    text(ctx, shown + more, W / 2, y + 254, { size: 10, font: FONT.mono, color: COLORS.grey, alpha: a });
+  }
   const ready = g.overT > 0.8;
-  text(ctx, 'click or R — again     S — save your painting', W / 2, y + h - 26, { size: 13, font: FONT.mono, alpha: ready ? 1 : 0.3 });
+  text(ctx, 'click/R again · T title · S save · V share', W / 2, y + h - 26, { size: 13, font: FONT.mono, alpha: ready ? 1 : 0.3 });
   text(ctx, `seed ${g.seed}  ·  Y copy`, W / 2, y + h + 18, { size: 11, font: FONT.mono, color: COLORS.grey, alpha: a });
   ctx.restore();
 }

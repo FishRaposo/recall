@@ -29,8 +29,11 @@ function fakeFx(): SimFx & { finished: boolean; checkpoint: SimCheckpoint | null
     sfx: {
       throw() {}, recall() {}, bounce() {}, hit() {}, kill() {}, catch() {}, catchSoft() {}, whiff() {},
       dash() {}, hurt() {}, spawn() {}, shoot() {}, clink() {}, wave() {}, clear() {}, heal() {}, gameOver() {},
+      pickup() {}, buffEnd() {}, pigment() {}, doubleTap() {}, draft() {}, pick() {},
     },
-    ink: { clear() {}, blot() {}, dot() {} },
+    ink: {
+      clear() {}, blot() {}, dot() {}, kill() {}, hurt() {}, death() {}, doubleTap() {}, pickup() {}, motion() {},
+    },
     particles: { burst() {}, ring() {} },
     floaters: { list: [] as Array<{ text: string }>, add() {} },
     shake: { add() {} },

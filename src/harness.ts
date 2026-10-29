@@ -20,12 +20,17 @@ export function attachHarness(g: Game) {
     FRAME: 1 / 60,
 
     // A fresh run with no automatic spawns and no wave clearing, unless waves: true.
-    start({ seed = 1, waves = false }: { seed?: number; waves?: boolean } = {}) {
-      g.newRun(seed);
+    start({ seed = 1, waves = false, mode = 'arcade' }: { seed?: number; waves?: boolean; mode?: 'arcade' | 'roguelike' } = {}) {
+      g.newRun(seed, mode);
       g.waveState = 'fight';
       g.groups = [];
       g.waveLock = !waves;
       g.input.script = { move: [0, 0], aim: [1, 0], held: { throw: false, dash: false } };
+      return T.state();
+    },
+
+    reset(seed = 1, mode: 'arcade' | 'roguelike' = 'arcade') {
+      g.newRun(seed, mode);
       return T.state();
     },
 
@@ -48,6 +53,21 @@ export function attachHarness(g: Game) {
     press(action: 'throw' | 'dash') { g.input.buffers[action] = INPUT_BUFFER; },
     hold(action: 'throw' | 'dash', down = true) { if (g.input.script) g.input.script.held[action] = down; },
 
+    spawnPickup(id?: string, x?: number, y?: number) { return g.sim.spawnPickup(id, x, y); },
+    collectPickups() { g.sim.collectPickups(); return T.state(); },
+    draft() {
+      const draft = g.sim.draft;
+      return draft ? { cards: draft.cards.map((c) => c.id), rerolls: draft.rerolls } : null;
+    },
+    pick(idOrIndex: string | number) {
+      const draft = g.sim.draft;
+      if (!draft) return false;
+      const id = typeof idOrIndex === 'number' ? draft.cards[idOrIndex]?.id : idOrIndex;
+      return id ? g.sim.chooseTechnique(id) : false;
+    },
+    reroll() { return g.sim.rerollDraft(); },
+    skipDraft() { return g.sim.skipDraft(); },
+
     step(frames = 1) {
       for (let i = 0; i < frames; i++) g.tick(T.FRAME);
       return T.state();
@@ -67,12 +87,19 @@ export function attachHarness(g: Game) {
       const b = g.blade;
       return {
         game: g.state,
+        mode: g.sim.runMode,
         wave: g.wave,
         waveState: g.waveState,
         score: g.score,
         combo: g.combo,
         mult: g.mult,
         hitstop: g.hitstop,
+        pigment: g.sim.pigment,
+        buffs: g.sim.buffList,
+        doubleTaps: g.sim.stats.doubleTaps ?? 0,
+        techniques: [...g.sim.techniques.entries()],
+        draft: g.sim.draft ? g.sim.draft.cards.map((c) => c.id) : null,
+        pickups: g.sim.pickups.map((p) => p.def.id),
         player: { x: p.x, y: p.y, hp: p.hp, invuln: p.invuln, dashing: p.dashing, alive: p.alive, vx: p.vx, vy: p.vy },
         blade: { state: b.state, x: b.x, y: b.y, speed: b.speed, flightHits: b.flightHits },
         enemies: g.enemies.map((e) => ({

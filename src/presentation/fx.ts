@@ -1,4 +1,4 @@
-import { W, H, ARENA, COLORS, FONT } from '../core/config.ts';
+import { W, H, ARENA, COLORS, FONT, INK } from '../core/config.ts';
 import { TAU, mulberry32 } from '../core/util.ts';
 import type { BurstOptions, FloaterOptions, FloatersLike, InkLike, ParticlesLike, ShakeLike } from '../core/types.ts';
 
@@ -177,6 +177,89 @@ export class InkLayer implements InkLike {
     c.arc(x, y, r, 0, TAU);
     c.fill();
     c.restore();
+  }
+
+  kill(x: number, y: number, r: number, dx = 0, dy = 0): void {
+    this.blot(x, y, r, INK.kill, dx, dy);
+  }
+
+  hurt(x: number, y: number, r: number, dx = 0, dy = 0): void {
+    this.blot(x, y, r, INK.hurt, dx, dy, 0.8);
+  }
+
+  death(x: number, y: number, r: number): void {
+    this.blot(x, y, r, INK.hurt, 0, 0, 0.9);
+  }
+
+  doubleTap(x1: number, y1: number, x2: number, y2: number): void {
+    const c = this.ctx;
+    this.clip(c);
+    c.lineCap = 'round';
+    c.strokeStyle = INK.doubleTap;
+    c.fillStyle = INK.doubleTap;
+    c.globalAlpha = 0.9;
+    c.lineWidth = 3;
+    c.beginPath();
+    c.moveTo(x1, y1);
+    c.lineTo(x2, y2);
+    c.stroke();
+    c.lineWidth = 1.4;
+    for (let i = 0; i < 4; i++) {
+      const a = i * (TAU / 4) + Math.PI / 4;
+      c.beginPath();
+      c.moveTo(x2, y2);
+      c.lineTo(x2 + Math.cos(a) * 7, y2 + Math.sin(a) * 7);
+      c.stroke();
+    }
+    for (let i = 1; i <= 3; i++) {
+      const t = i / 4;
+      c.beginPath();
+      c.arc(x1 + (x2 - x1) * t, y1 + (y2 - y1) * t, 1.8, 0, TAU);
+      c.fill();
+    }
+    c.restore();
+  }
+
+  pickup(x: number, y: number, kind: 'buff' | 'pigment' | 'heal'): void {
+    const c = this.ctx;
+    this.clip(c);
+    c.fillStyle = INK.pickup;
+    c.strokeStyle = COLORS.paper;
+    c.globalAlpha = 0.88;
+    if (kind === 'pigment') {
+      c.beginPath();
+      c.arc(x, y, 4.5, 0, TAU);
+      c.fill();
+      c.beginPath();
+      c.arc(x + 6, y - 4, 1.4, 0, TAU);
+      c.fill();
+    } else if (kind === 'heal') {
+      c.beginPath();
+      c.arc(x, y, 5, 0, TAU);
+      c.fill();
+      c.lineWidth = 1.6;
+      c.beginPath();
+      c.moveTo(x - 3, y);
+      c.lineTo(x + 3, y);
+      c.moveTo(x, y - 3);
+      c.lineTo(x, y + 3);
+      c.stroke();
+    } else {
+      for (let i = 0; i < 6; i++) {
+        const a = (i * TAU) / 6;
+        c.beginPath();
+        c.arc(x + Math.cos(a) * 7, y + Math.sin(a) * 7, 1.7, 0, TAU);
+        c.fill();
+      }
+      c.beginPath();
+      c.arc(x, y, 2.4, 0, TAU);
+      c.fill();
+    }
+    c.restore();
+  }
+
+  motion(x: number, y: number, r: number, alpha: number): void {
+    this.dot(x, y, r, INK.motion, alpha);
   }
 }
 

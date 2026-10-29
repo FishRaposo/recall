@@ -3,6 +3,9 @@ import { Rng, TAU } from './core/util.ts';
 import { Sim } from './core/sim.ts';
 import { Blade } from './core/blade.ts';
 import { ENEMIES, createEnemy } from './content/enemies.ts';
+import { TECHNIQUES } from './content/techniques.ts';
+import { PICKUPS } from './content/pickups.ts';
+import { rerollCost } from './core/run.ts';
 import { Input } from './platform/input.ts';
 import { Sfx } from './platform/audio.ts';
 import { loadBest, saveBest, loadSave, saveRun, clearRunSave as clearSavedRun } from './platform/storage.ts';
@@ -12,8 +15,9 @@ import type { Settings } from './platform/settings.ts';
 import { Shake, Particles, InkLayer, Floaters, makeBackground } from './presentation/fx.ts';
 import * as ui from './presentation/ui.ts';
 import { Menus } from './presentation/menus.ts';
+import { drawPickups } from './presentation/pickups.ts';
 import { attachHarness } from './harness.ts';
-import type { BladeLike, EnemyLike, PlayerLike, SimFx, WaveState, SpawnGroup, Vec } from './core/types.ts';
+import type { BladeLike, EnemyLike, PlayerLike, RunMode, SimFx, WaveState, SpawnGroup, Vec } from './core/types.ts';
 
 const params = new URLSearchParams(location.search);
 const FIXED_SEED = params.has('seed') ? Number(params.get('seed')) >>> 0 : null;
@@ -47,6 +51,8 @@ export class Game implements SimFx, ui.UiGame {
   seed = 1;
   save: RecallSave | null = null;
   continueBtn: HTMLButtonElement | null = null;
+  modeSelect: HTMLElement | null = null;
+  draftOpen = false;
   multCap = MULT_CAP;
   catchesPerMult = CATCHES_PER_MULT;
   titleBlade: Blade | null = null;
@@ -73,9 +79,18 @@ export class Game implements SimFx, ui.UiGame {
     this.applySettings(this.settings, false);
     this.best = loadBest();
     this.harness = HARNESS;
-    this.sim = new Sim({ catalog: ENEMIES, spawn: createEnemy, input: this.input, fx: this, introTime: INTRO_TIME });
+    this.sim = new Sim({
+      catalog: ENEMIES,
+      spawn: createEnemy,
+      input: this.input,
+      fx: this,
+      introTime: INTRO_TIME,
+      techniques: TECHNIQUES,
+      pickups: PICKUPS,
+    });
     this.save = loadSave();
     this.continueBtn = document.getElementById('continue-btn') as HTMLButtonElement | null;
+    this.modeSelect = document.getElementById('mode-select');
     this.seed = this.save?.seed ?? FIXED_SEED ?? ((Date.now() ^ 0x9e3779b9) >>> 0);
     this.paintTitle();
 
@@ -108,6 +123,11 @@ export class Game implements SimFx, ui.UiGame {
   get combo(): number { return this.sim.combo; }
   get mult(): number { return this.sim.mult; }
   get stats() { return this.sim.stats; }
+  get runMode(): RunMode { return this.sim.runMode; }
+  get pigment(): number { return this.sim.pigment; }
+  get buffs() { return this.sim.buffList; }
+  get techniques() { return this.sim.techniqueList; }
+  get paintingTitle(): string { return this.sim.paintingTitle; }
   get wave(): number { return this.sim.wave; }
   get waveState(): WaveState { return this.sim.waveState; }
   set waveState(v: WaveState) { this.sim.waveState = v; }
@@ -136,22 +156,27 @@ export class Game implements SimFx, ui.UiGame {
   onBladeBounce(b: BladeLike): void {
     this.sfx.bounce();
     this.shake.add(0.06);
-    this.ink.dot(b.x, b.y, 2.2, COLORS.red, 0.5);
+    this.ink.motion(b.x, b.y, 2.2, 0.5);
     this.particles.burst(b.x, b.y, { count: 4, color: COLORS.red, speed: [40, 120], size: [1, 2.5] });
   }
 
   onDeath(): void {
-    this.clearSave();
+    if (this.sim.runMode === 'arcade') this.clearSave();
     this.menus.announce(`Run over on wave ${this.sim.wave}`);
   }
 
   onFinish(score: number, wave: number): void {
     this.screen = 'over';
-    this.clearSave();
-    if (score > this.best.score) {
-      this.best = { score, wave };
-      this.newBest = true;
-      saveBest(this.best);
+    this.refreshContinue();
+    if (this.sim.runMode === 'arcade') {
+      this.clearSave();
+      if (score > this.best.score) {
+        this.best = { score, wave };
+        this.newBest = true;
+        saveBest(this.best);
+      }
+    } else {
+      this.newBest = false;
     }
   }
 
@@ -168,8 +193,8 @@ export class Game implements SimFx, ui.UiGame {
   }
 
   refreshContinue(): void {
-    if (!this.continueBtn) return;
-    this.continueBtn.hidden = !(this.screen === 'title' && !!this.save);
+    if (this.continueBtn) this.continueBtn.hidden = !(this.screen === 'title' && !!this.save);
+    if (this.modeSelect) this.modeSelect.hidden = this.screen !== 'title';
   }
 
   continueRun(): void {
@@ -202,20 +227,29 @@ export class Game implements SimFx, ui.UiGame {
 
   // ---------------------------------------------------------------- lifecycle / settings
 
-  newRun(seedOverride?: number): void {
+  toTitle(): void {
+    this.screen = 'title';
+    this.draftOpen = false;
+    this.menus.close();
+    this.refreshContinue();
+    this.menus.announce('Title');
+  }
+
+  newRun(seedOverride?: number, mode: RunMode = 'arcade'): void {
     this.sfx.unlock();
-    this.clearSave();
+    if (mode === 'arcade') this.clearSave();
     const seed = seedOverride ?? FIXED_SEED ?? ((Date.now() ^ 0x9e3779b9) >>> 0);
     this.seed = seed;
-    this.sim.newRun(seed);
+    this.sim.newRun(seed, mode);
     this.screen = 'playing';
     this.displayScore = 0;
     this.flashT = 0;
     this.newBest = false;
+    this.draftOpen = false;
     this.input.clearBuffers();
     this.menus.close();
     this.refreshContinue();
-    this.menus.announce(`Wave 1 · seed ${seed}`);
+    this.menus.announce(`${mode === 'roguelike' ? 'Roguelike' : 'Arcade'} · wave 1 · seed ${seed}`);
   }
 
   applySettings(settings: Settings, persist = true): void {
@@ -258,7 +292,7 @@ export class Game implements SimFx, ui.UiGame {
           this.screen = 'playing';
           this.menus.announce('Resumed');
         },
-        onNewRun: () => this.newRun(),
+        onNewRun: () => this.newRun(undefined, this.sim.runMode),
       });
     }, 0);
   }
@@ -278,6 +312,10 @@ export class Game implements SimFx, ui.UiGame {
     const pause = document.getElementById('pause-btn');
     const throwBtn = document.getElementById('throw-btn');
     const dashBtn = document.getElementById('dash-btn');
+    const arcadeBtn = document.getElementById('arcade-btn');
+    const roguelikeBtn = document.getElementById('roguelike-btn');
+    arcadeBtn?.addEventListener('click', () => this.newRun(undefined, 'arcade'));
+    roguelikeBtn?.addEventListener('click', () => this.newRun(undefined, 'roguelike'));
     settings?.addEventListener('click', () => {
       if (this.screen === 'playing') this.pause();
       else this.openSettings();
@@ -318,6 +356,7 @@ export class Game implements SimFx, ui.UiGame {
     if (!this.menus.isOpen) this.handleMeta();
 
     if (!this.menus.isOpen && (this.screen === 'playing' || this.screen === 'over')) this.sim.tick(realDt);
+    this.syncDraft();
 
     this.clock += realDt;
     this.displayScore += (this.sim.score - this.displayScore) * (1 - Math.exp(-12 * realDt));
@@ -326,6 +365,31 @@ export class Game implements SimFx, ui.UiGame {
     this.shake.update(realDt);
     if (this.sim.mode !== 'over') this.flashT = Math.max(0, this.flashT - realDt * 4);
     this.input.endFrame();
+  }
+
+  private syncDraft(): void {
+    if (this.screen !== 'playing' || this.sim.mode !== 'draft' || this.draftOpen || this.menus.isOpen) return;
+    const draft = this.sim.draft;
+    if (!draft) return;
+    this.draftOpen = true;
+    this.menus.openDraft(draft.cards, this.sim.pigment, rerollCost(draft), {
+      onPick: (id) => {
+        this.draftOpen = false;
+        this.sim.chooseTechnique(id);
+      },
+      onReroll: () => {
+        this.draftOpen = false;
+        if (!this.sim.rerollDraft()) this.menus.announce('Not enough pigment');
+      },
+      onSkip: () => {
+        this.draftOpen = false;
+        this.sim.skipDraft();
+      },
+      onSettings: () => {
+        this.draftOpen = false;
+        this.openSettings();
+      },
+    });
   }
 
   handleMeta(): void {
@@ -356,7 +420,7 @@ export class Game implements SimFx, ui.UiGame {
         }
         if (inp.startPressed()) {
           this.sfx.unlock();
-          this.newRun();
+          this.newRun(undefined, 'arcade');
         }
         break;
       case 'playing':
@@ -370,36 +434,81 @@ export class Game implements SimFx, ui.UiGame {
         break;
       case 'over':
         if (inp.was('KeyS')) this.savePainting();
-        if (this.sim.overT > 0.8 && (inp.startPressed() || inp.was('KeyR'))) this.newRun();
+        if (inp.was('KeyV')) this.sharePainting();
+        if (inp.was('KeyC')) this.copyPainting();
+        if (inp.was('KeyT')) this.toTitle();
+        if (this.sim.overT > 0.8 && (inp.startPressed() || inp.was('KeyR'))) this.newRun(undefined, this.sim.runMode);
         break;
     }
   }
 
   // ---------------------------------------------------------------- painting
 
-  savePainting(): void {
+  private paintingCanvas(): HTMLCanvasElement | null {
     const c = document.createElement('canvas');
     c.width = W * 2;
     c.height = H * 2;
     const x = c.getContext('2d');
-    if (!x) return;
+    if (!x) return null;
     x.drawImage(this.bg, 0, 0, c.width, c.height);
     x.drawImage(this.ink.canvas, 0, 0, c.width, c.height);
     x.scale(2, 2);
     ui.text(x, 'RECALL', 40, 27, { size: 15, font: FONT.mono, weight: 'bold', align: 'left', spacing: 4 });
-    ui.text(x, `wave ${this.sim.wave}  ·  ${Math.round(this.sim.score).toLocaleString('en-US')}`, W - 40, 27, { size: 14, style: 'italic', align: 'right' });
+    ui.text(x, this.sim.paintingTitle || 'untitled', 40, 46, { size: 13, style: 'italic', align: 'left' });
+    ui.text(x, `${this.sim.runMode}  ·  wave ${this.sim.wave}  ·  ${Math.round(this.sim.score).toLocaleString('en-US')}  ·  seed ${this.seed}`, W - 40, 27, { size: 12, font: FONT.mono, align: 'right' });
+    return c;
+  }
+
+  private downloadBlob(blob: Blob): void {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `recall-${this.sim.runMode}-wave${this.sim.wave}-${Math.round(this.sim.score)}.png`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+  }
+
+  savePainting(): void {
+    const c = this.paintingCanvas();
+    if (!c) return;
     c.toBlob((blob) => {
-      if (!blob) return;
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `recall-wave${this.sim.wave}-${Math.round(this.sim.score)}.png`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 4000);
+      if (blob) this.downloadBlob(blob);
     });
     this.floaters.add(W / 2, H - 60, 'painting saved', { size: 13, life: 1.2, rise: 10 });
+  }
+
+  sharePainting(): void {
+    const c = this.paintingCanvas();
+    if (!c) return;
+    c.toBlob(async (blob) => {
+      if (!blob) return;
+      const file = new File([blob], `recall-${this.sim.paintingTitle || 'painting'}.png`, { type: 'image/png' });
+      const data: ShareData = {
+        files: [file],
+        title: this.sim.paintingTitle || 'Recall painting',
+        text: `${this.sim.paintingTitle || 'untitled'} — ${this.sim.runMode}, wave ${this.sim.wave}, score ${Math.round(this.sim.score)}`,
+      };
+      if (navigator.canShare?.(data) && navigator.share) {
+        try {
+          await navigator.share(data);
+          return;
+        } catch {
+          /* fall back to a download */
+        }
+      }
+      this.downloadBlob(blob);
+    });
+    this.floaters.add(W / 2, H - 60, 'sharing painting', { size: 13, life: 1.2, rise: 10 });
+  }
+
+  copyPainting(): void {
+    const text = `${this.sim.paintingTitle || 'untitled'} — ${this.sim.runMode}, wave ${this.sim.wave}, score ${Math.round(this.sim.score)}, seed ${this.seed}`;
+    navigator.clipboard?.writeText(text).then(
+      () => this.menus.announce('Painting title copied'),
+      () => this.menus.announce('Could not copy the painting title'),
+    );
   }
 
   // ---------------------------------------------------------------- rendering
@@ -442,8 +551,11 @@ export class Game implements SimFx, ui.UiGame {
 
     if (this.screen === 'title') ui.drawTitle(ctx, this);
     else {
-      ui.drawHud(ctx, this);
-      ui.drawWaveBanner(ctx, this);
+      const reveal = this.screen === 'over' && this.sim.overT < 1.4;
+      if (!reveal) {
+        ui.drawHud(ctx, this);
+        ui.drawWaveBanner(ctx, this);
+      }
       if (this.screen === 'playing' || this.screen === 'paused') {
         ui.drawHint(ctx, this);
         if (this.screen === 'playing') ui.drawReticle(ctx, this);
@@ -464,6 +576,7 @@ export class Game implements SimFx, ui.UiGame {
   drawWorld(ctx: CanvasRenderingContext2D): void {
     const p = this.sim.player;
     const b = this.sim.blade;
+    drawPickups(ctx, this.sim.pickups);
     // The tether: a faint line from you to the blade while it's away.
     if (b.flying && p.alive) {
       ctx.save();

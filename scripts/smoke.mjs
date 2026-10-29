@@ -181,6 +181,61 @@ for (const name of names) {
     const overflow = await mp.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
     expect(!overflow, 'page overflows horizontally at 390px');
     await mobile.close();
+
+    step = 'roguelike';
+    const rogue = await browser.newContext({ viewport: { width: 960, height: 540 } });
+    const rp = await rogue.newPage();
+    attach(rp, errors);
+    await rp.goto(`${base}/index.html`);
+    await waitReady(rp);
+    await rp.evaluate(() => { try { localStorage.clear(); } catch { /* ignore */ } });
+    await rp.reload();
+    await waitReady(rp);
+    await rp.click('#roguelike-btn');
+    await waitState(rp, 'playing');
+    await rp.evaluate(() => {
+      const g = window.__recall;
+      g.player.invuln = 999;
+      g.sim.waveState = 'fight';
+      g.sim.groups = [];
+      g.sim.enemies = [];
+      g.sim.newEnemies = [];
+      g.sim.waveLock = false;
+    });
+    await rp.waitForSelector('dialog[open]', { timeout: 5000 });
+    expect((await rp.locator('dialog h2').innerText()) === 'Wave cleared', 'draft dialog has the wrong title');
+    expect(await rp.locator('.draft-card').count() === 3, 'draft did not offer three cards');
+    await rp.locator('.draft-card').first().click();
+    await rp.waitForSelector('dialog', { state: 'detached' });
+    const rogueState = await rp.evaluate(() => ({
+      mode: window.__recall.sim.runMode,
+      wave: window.__recall.sim.wave,
+      techniques: window.__recall.sim.techniques.size,
+      save: localStorage.getItem('recall.save.v1'),
+    }));
+    expect(rogueState.mode === 'roguelike', 'mode did not stay roguelike');
+    expect(rogueState.wave === 2, `draft pick did not start wave 2 (${rogueState.wave})`);
+    expect(rogueState.techniques === 1, 'draft pick did not bank a technique');
+    expect(rogueState.save === null, 'roguelike wrote an Arcade save');
+    const pigment = await rp.evaluate(() => {
+      const g = window.__recall;
+      g.sim.spawnPickup('pigment', g.player.x, g.player.y);
+      g.sim.collectPickups();
+      return g.sim.pigment;
+    });
+    expect(pigment >= 3, `pickup did not grant pigment (${pigment})`);
+    await rp.evaluate(() => {
+      const g = window.__recall;
+      g.player.hp = 1;
+      g.player.invuln = 0;
+      g.hurtPlayer(g.player.x + 5, g.player.y);
+    });
+    await rp.waitForFunction(() => window.__recall.state === 'over', undefined, { timeout: 5000 });
+    await rp.waitForTimeout(900);
+    await rp.keyboard.press('KeyT');
+    await rp.waitForFunction(() => window.__recall.state === 'title', undefined, { timeout: 5000 });
+    expect(await rp.locator('#mode-select').isVisible(), 'mode select is not visible after returning to the title');
+    await rogue.close();
   } catch (e) {
     errors.push(`journey failed at ${step}: ${String(e.message).split('\n')[0]}`);
   } finally {
@@ -192,7 +247,7 @@ for (const name of names) {
     console.error(`FAIL ${name}`);
     for (const error of errors) console.error(`      ${error}`);
   } else {
-    console.log(`ok   ${name}: title, settings, wave, move, throw, pause, save/continue, death/restart, touch drag/throw`);
+    console.log(`ok   ${name}: title, settings, wave, move, throw, pause, save/continue, death/restart, touch drag/throw, roguelike draft/pickup/title`);
   }
 }
 

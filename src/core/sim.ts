@@ -1,14 +1,20 @@
 // The whole game loop, with no DOM. A run is a state object advanced by `tick(dt)`. Effects and
 // audio are injected; the browser shell and the Node tests both run this exact code.
 
-import { ARENA, W, H, INTRO_TIME, DEATH_TIME, HITSTOP_HIT, HITSTOP_KILL, HITSTOP_HURT, MULT_CAP, CATCHES_PER_MULT } from './config.ts';
+import {
+  ARENA, W, H, INTRO_TIME, DEATH_TIME, HITSTOP_HIT, HITSTOP_KILL, HITSTOP_HURT, MULT_CAP,
+  CATCHES_PER_MULT, DRAFT, DOUBLE_TAP_WINDOW, PICKUP,
+} from './config.ts';
 import { Rng, norm, segCircleHit, circleHit } from './util.ts';
 import { waveRoster, spawnGroups, waveBudget, isHeavyWave } from './waves.ts';
 import { Player } from './player.ts';
 import { Blade } from './blade.ts';
+import { computeMods, drawDraft, identityMods, pickWeighted, rerollCost } from './run.ts';
+import { paintingTitle as makePaintingTitle } from './painting.ts';
 import type {
-  BladeLike, BladeWorld, EnemyCatalog, EnemyKind, EnemyLike, EnemyWorld, PlayerWorld, RunStats,
-  Shot, SimCheckpoint, SimFx, SimInput, SimMode, SpawnGroup, WaveState, Vec,
+  BladeLike, BladeWorld, BuffDef, DraftState, EnemyCatalog, EnemyKind, EnemyLike, EnemyWorld,
+  Mods, PickupDef, PickupState, PlayerWorld, RunMode, RunStats, Shot, SimCheckpoint, SimFx,
+  SimInput, SimMode, SpawnGroup, TechniqueDef, WaveState, Vec,
 } from './types.ts';
 
 export interface SimOptions {
@@ -17,6 +23,8 @@ export interface SimOptions {
   input: SimInput;
   fx: SimFx;
   introTime?: number;
+  techniques?: TechniqueDef[];
+  pickups?: PickupDef[];
 }
 
 export class Sim implements EnemyWorld, BladeWorld, PlayerWorld {
@@ -53,6 +61,22 @@ export class Sim implements EnemyWorld, BladeWorld, PlayerWorld {
   taught = false;
   flash = 0;
 
+  readonly techniqueDefs: TechniqueDef[];
+  readonly pickupDefs: PickupDef[];
+  runMode: RunMode = 'arcade';
+  mods: Mods = identityMods();
+  doubleTapWindow = DOUBLE_TAP_WINDOW;
+  techniques = new Map<string, number>();
+  pigment = 0;
+  buffs = new Map<string, { def: BuffDef; remaining: number }>();
+  pickups: PickupState[] = [];
+  pickupClock = 0;
+  nextPickupAt: number = PICKUP.firstDelay;
+  draft: DraftState | null = null;
+  comboShield = 0;
+  paintingTitle = '';
+  private lastPaintingTitle = '';
+
   constructor(opts: SimOptions) {
     this.catalog = opts.catalog;
     this.spawnEnemy = opts.spawn;
@@ -61,6 +85,8 @@ export class Sim implements EnemyWorld, BladeWorld, PlayerWorld {
     this.ink = opts.fx.ink;
     this.sfx = opts.fx.sfx;
     this.introTime = opts.introTime ?? INTRO_TIME;
+    this.techniqueDefs = opts.techniques ?? [];
+    this.pickupDefs = opts.pickups ?? [];
   }
 
   get mult(): number {
@@ -69,9 +95,10 @@ export class Sim implements EnemyWorld, BladeWorld, PlayerWorld {
 
   // ---------------------------------------------------------------- lifecycle
 
-  newRun(seed: number): void {
+  newRun(seed: number, mode: RunMode = 'arcade'): void {
     this.rng = new Rng(seed);
     this.seed = seed;
+    this.runMode = mode;
     this.player = new Player(ARENA.x + ARENA.w / 2, ARENA.y + ARENA.h / 2);
     this.blade = new Blade(this.player);
     this.enemies = [];
@@ -79,7 +106,7 @@ export class Sim implements EnemyWorld, BladeWorld, PlayerWorld {
     this.shots = [];
     this.score = 0;
     this.combo = 0;
-    this.stats = { kills: 0, bestMult: 1, time: 0 };
+    this.stats = { kills: 0, bestMult: 1, time: 0, doubleTaps: 0 };
     this.hitstop = 0;
     this.timeScale = 1;
     this.mode = 'playing';
@@ -89,6 +116,17 @@ export class Sim implements EnemyWorld, BladeWorld, PlayerWorld {
     this.taught = false;
     this.flash = 0;
     this.waveLock = false;
+    this.techniques = new Map();
+    this.pigment = 0;
+    this.buffs = new Map();
+    this.pickups = [];
+    this.pickupClock = 0;
+    this.nextPickupAt = PICKUP.firstDelay;
+    this.draft = null;
+    this.comboShield = 0;
+    this.mods = identityMods();
+    this.doubleTapWindow = DOUBLE_TAP_WINDOW;
+    this.paintingTitle = '';
     this.ink.clear();
     this.startWave(1);
   }
@@ -100,25 +138,32 @@ export class Sim implements EnemyWorld, BladeWorld, PlayerWorld {
     this.waveT = this.introTime;
     this.groups = spawnGroups(waveRoster(n, this.rng, this.catalog), n, this.rng);
     this.groupClock = 0;
+    this.pickups = [];
+    this.pickupClock = 0;
+    this.nextPickupAt = PICKUP.firstDelay;
+    this.comboShield = this.mods.comboShield ?? 0;
     const debut = (Object.keys(this.catalog) as EnemyKind[]).find((k) => this.catalog[k].unlock === n);
     this.debutNote = debut ? this.catalog[debut].note : null;
     this.sfx.wave();
-    this.fx.onCheckpoint?.({
-      version: 1,
-      seed: this.seed,
-      rngState,
-      wave: n,
-      score: this.score,
-      combo: this.combo,
-      hp: this.player.hp,
-      stats: { ...this.stats },
-    });
+    if (this.runMode === 'arcade') {
+      this.fx.onCheckpoint?.({
+        version: 1,
+        seed: this.seed,
+        rngState,
+        wave: n,
+        score: this.score,
+        combo: this.combo,
+        hp: this.player.hp,
+        stats: { ...this.stats },
+      });
+    }
   }
 
   resume(save: SimCheckpoint): void {
     this.seed = save.seed;
     this.rng = new Rng(save.seed);
     this.rng.state = save.rngState;
+    this.runMode = 'arcade';
     this.player = new Player(ARENA.x + ARENA.w / 2, ARENA.y + ARENA.h / 2);
     this.player.hp = Math.max(1, Math.min(this.player.maxHp, save.hp));
     this.blade = new Blade(this.player);
@@ -127,7 +172,7 @@ export class Sim implements EnemyWorld, BladeWorld, PlayerWorld {
     this.shots = [];
     this.score = save.score;
     this.combo = save.combo;
-    this.stats = { ...save.stats };
+    this.stats = { ...save.stats, doubleTaps: save.stats.doubleTaps ?? 0 };
     this.hitstop = 0;
     this.timeScale = 1;
     this.mode = 'playing';
@@ -137,6 +182,15 @@ export class Sim implements EnemyWorld, BladeWorld, PlayerWorld {
     this.taught = false;
     this.flash = 0;
     this.waveLock = false;
+    this.techniques = new Map();
+    this.pigment = 0;
+    this.buffs = new Map();
+    this.pickups = [];
+    this.draft = null;
+    this.comboShield = 0;
+    this.mods = identityMods();
+    this.doubleTapWindow = DOUBLE_TAP_WINDOW;
+    this.paintingTitle = '';
     this.ink.clear();
     this.startWave(save.wave);
   }
@@ -156,6 +210,15 @@ export class Sim implements EnemyWorld, BladeWorld, PlayerWorld {
       this.fx.particles.ring(this.player.x, this.player.y, '#d9402b', 26);
       this.sfx.heal();
     }
+    if (this.runMode === 'roguelike') {
+      this.pigment += 1;
+      this.pickups = [];
+      this.draft = drawDraft(this.techniqueDefs, this.wave, this.techniques, this.rng);
+      this.mode = 'draft';
+      this.waveState = 'clear';
+      this.waveT = Number.POSITIVE_INFINITY;
+      this.sfx.draft();
+    }
   }
 
   die(): void {
@@ -163,7 +226,7 @@ export class Sim implements EnemyWorld, BladeWorld, PlayerWorld {
     this.mode = 'dying';
     this.timeScale = 0.3;
     this.deathT = DEATH_TIME;
-    this.ink.blot(p.x, p.y, 26, '#d9402b', 0, 0, 0.9);
+    this.ink.death(p.x, p.y, 26);
     this.fx.particles.burst(p.x, p.y, { count: 40, color: '#d9402b', speed: [80, 420], life: [0.4, 1.1], size: [2, 6] });
     this.fx.shake.add(1);
     this.sfx.gameOver();
@@ -171,6 +234,8 @@ export class Sim implements EnemyWorld, BladeWorld, PlayerWorld {
   }
 
   finishRun(): void {
+    this.paintingTitle = makePaintingTitle(this.seed, this.wave, this.stats.kills, this.lastPaintingTitle);
+    this.lastPaintingTitle = this.paintingTitle;
     this.mode = 'over';
     this.overT = 0;
     this.fx.onFinish(this.score, this.wave);
@@ -192,6 +257,10 @@ export class Sim implements EnemyWorld, BladeWorld, PlayerWorld {
   }
 
   onThrow(_b: BladeLike): void {
+    const scale = 1 + (this.mods.throwSpeedPct ?? 0);
+    _b.speed *= scale;
+    _b.vx *= scale;
+    _b.vy *= scale;
     this.sfx.throw();
     this.player.squash = 0.5;
   }
@@ -208,6 +277,18 @@ export class Sim implements EnemyWorld, BladeWorld, PlayerWorld {
 
   onBladeBounce(b: BladeLike): void {
     this.fx.onBladeBounce(b);
+  }
+
+  onDoubleTap(e: EnemyLike, x1: number, y1: number, x2: number, y2: number): void {
+    this.stats.doubleTaps = (this.stats.doubleTaps ?? 0) + 1;
+    this.ink.doubleTap(x1, y1, x2, y2);
+    this.sfx.doubleTap();
+    this.fx.particles.ring(e.x, e.y, '#c9971f', 14);
+    const bonus = (this.mods.doubleTapScore ?? 0) * this.mult;
+    if (bonus > 0) {
+      this.score += bonus;
+      this.fx.floaters.add(e.x, e.y - e.r - 16, `double tap +${bonus}`, { size: 12, color: '#c9971f', life: 0.9 });
+    }
   }
 
   // Swept collision for the blade this frame. Pierces everything; heavy enemies slow it.
@@ -228,13 +309,16 @@ export class Sim implements EnemyWorld, BladeWorld, PlayerWorld {
       }
       b.hitSet.add(e);
       b.flightHits += 1;
-      e.hit(dx, dy, this);
-      if (e.heavy) b.drag();
+      const damage = 1 + (b.state === 'return' ? (this.mods.returnDamage ?? 0) + (e.heavy && this.mods.sunderHeavy ? 1 : 0) : 0);
+      e.hit(dx, dy, this, damage);
+      const doubleTap = b.registerHit(e, x1, y1, x2, y2, this);
+      if (e.heavy && !this.mods.ignoreHeavyDrag) b.drag();
       this.sfx.hit(b.flightHits + this.combo);
       this.hitstop = Math.max(this.hitstop, e.dead ? HITSTOP_KILL : HITSTOP_HIT);
       this.fx.shake.add(e.dead ? 0.26 : 0.13);
       this.fx.particles.burst(e.x, e.y, { count: e.dead ? 16 : 6, dirX: dx, dirY: dy, spread: 1.7 });
       if (e.dead) this.kill(e, dx, dy);
+      if (doubleTap) this.onDoubleTap(e, x1, y1, x2, y2);
     }
     for (const s of this.shots) {
       if (s.dead || !segCircleHit(x1, y1, x2, y2, s.x, s.y, s.r + b.r)) continue;
@@ -262,7 +346,7 @@ export class Sim implements EnemyWorld, BladeWorld, PlayerWorld {
     const p = this.player;
     if (hits > 0) {
       const before = this.mult;
-      this.combo += 1;
+      this.combo += 1 + (hits >= 2 ? (this.mods.comboPerCatch ?? 0) : 0);
       const m = this.mult;
       this.stats.bestMult = Math.max(this.stats.bestMult, m);
       this.sfx.catch(m);
@@ -275,9 +359,15 @@ export class Sim implements EnemyWorld, BladeWorld, PlayerWorld {
       }
       this.taught = true;
     } else if (hadTargets && this.combo > 0) {
-      this.combo = 0;
-      this.fx.floaters.add(p.x, p.y - 22, 'dropped', { size: 13, color: '#958c7c' });
-      this.sfx.whiff();
+      if (this.comboShield > 0) {
+        this.comboShield -= 1;
+        this.fx.floaters.add(p.x, p.y - 22, 'saved', { size: 13, color: '#2f5fa8' });
+        this.sfx.catchSoft();
+      } else {
+        this.combo = 0;
+        this.fx.floaters.add(p.x, p.y - 22, 'dropped', { size: 13, color: '#958c7c' });
+        this.sfx.whiff();
+      }
     } else {
       this.sfx.catchSoft();
     }
@@ -292,7 +382,7 @@ export class Sim implements EnemyWorld, BladeWorld, PlayerWorld {
     this.flash = 1;
     this.fx.flash(1);
     this.sfx.hurt();
-    this.ink.blot(p.x, p.y, 9, '#d9402b', p.vx, p.vy, 0.8);
+    this.ink.hurt(p.x, p.y, 9, p.vx, p.vy);
     this.fx.particles.burst(p.x, p.y, { count: 18, color: '#d9402b', speed: [80, 300] });
     if (!p.alive) this.die();
   }
@@ -308,12 +398,181 @@ export class Sim implements EnemyWorld, BladeWorld, PlayerWorld {
     return [p.x < W / 2 ? ARENA.x + ARENA.w - r - 20 : ARENA.x + r + 20, p.y < H / 2 ? ARENA.y + ARENA.h - r - 20 : ARENA.y + r + 20];
   }
 
+  // ---------------------------------------------------------------- run, pickups and draft
+
+  recomputeMods(): void {
+    const buffs = [...this.buffs.values()].map((b) => b.def);
+    this.mods = computeMods(this.techniques, this.techniqueDefs, buffs);
+  }
+
+  get buffList(): Array<{ name: string; remaining: number; duration: number }> {
+    return [...this.buffs.values()].map((b) => ({ name: b.def.name, remaining: b.remaining, duration: b.def.duration }));
+  }
+
+  get techniqueList(): Array<{ name: string; stacks: number }> {
+    return this.techniqueDefs
+      .filter((def) => (this.techniques.get(def.id) ?? 0) > 0)
+      .map((def) => ({ name: def.name, stacks: this.techniques.get(def.id) ?? 0 }));
+  }
+
+  tickBuffs(dt: number): void {
+    if (!this.buffs.size) return;
+    let changed = false;
+    for (const [id, buff] of this.buffs) {
+      buff.remaining -= dt;
+      if (buff.remaining <= 0) {
+        this.buffs.delete(id);
+        changed = true;
+        this.sfx.buffEnd();
+        this.fx.floaters.add(this.player.x, this.player.y - 30, `${buff.def.name} ended`, { size: 11, color: '#958c7c', life: 0.8 });
+      }
+    }
+    if (changed) this.recomputeMods();
+  }
+
+  updatePickups(dt: number): void {
+    for (let i = this.pickups.length - 1; i >= 0; i--) {
+      const p = this.pickups[i];
+      p.life -= dt;
+      if (p.life <= 0) this.pickups.splice(i, 1);
+    }
+    if (this.waveState !== 'fight' || this.mode !== 'playing') return;
+    if (this.pickups.length >= PICKUP.maxActive) return;
+    this.pickupClock += dt;
+    if (this.pickupClock < this.nextPickupAt) return;
+    this.spawnPickup();
+    this.pickupClock = 0;
+    this.nextPickupAt = this.rng.float(PICKUP.minGap, PICKUP.maxGap);
+  }
+
+  findPickupSpawn(): Vec {
+    const p = this.player;
+    let best: Vec = [ARENA.x + ARENA.w / 2, ARENA.y + ARENA.h / 2];
+    let bestD = -1;
+    for (let i = 0; i < 40; i++) {
+      const x = this.rng.float(ARENA.x + 24, ARENA.x + ARENA.w - 24);
+      const y = this.rng.float(ARENA.y + 24, ARENA.y + ARENA.h - 24);
+      const pd = Math.hypot(x - p.x, y - p.y);
+      if (pd > bestD) {
+        best = [x, y];
+        bestD = pd;
+      }
+      if (pd < 140) continue;
+      let clear = true;
+      for (const e of this.enemies) {
+        if (e.active && Math.hypot(x - e.x, y - e.y) < 70) {
+          clear = false;
+          break;
+        }
+      }
+      if (clear) return [x, y];
+    }
+    return best;
+  }
+
+  spawnPickup(id?: string, x?: number, y?: number): PickupState | null {
+    if (this.runMode !== 'roguelike') return null;
+    const def = id
+      ? this.pickupDefs.find((p) => p.id === id) ?? null
+      : pickWeighted(this.pickupDefs.filter((p) => p.minWave <= this.wave), (p) => p.weight, this.rng);
+    if (!def) return null;
+    const [sx, sy] = x !== undefined && y !== undefined ? [x, y] : this.findPickupSpawn();
+    const state: PickupState = { def, x: sx, y: sy, life: def.lifetime, maxLife: def.lifetime };
+    this.pickups.push(state);
+    return state;
+  }
+
+  collectPickups(): void {
+    if (!this.player.alive) return;
+    for (let i = this.pickups.length - 1; i >= 0; i--) {
+      const p = this.pickups[i];
+      if (!circleHit(this.player.x, this.player.y, this.player.r, p.x, p.y, 12)) continue;
+      this.pickups.splice(i, 1);
+      this.applyPickup(p);
+    }
+  }
+
+  applyPickup(p: PickupState): void {
+    const def = p.def;
+    this.ink.pickup(p.x, p.y, def.kind);
+    this.sfx.pickup(def.kind);
+    if (def.dashRefill) {
+      this.player.dashCharges = this.player.dashChargesMax ?? 1;
+      this.player.dashCd = 0;
+      this.fx.floaters.add(p.x, p.y - 16, 'dash refilled', { size: 12, color: '#2f5fa8', life: 0.9 });
+      return;
+    }
+    if (def.buff && def.kind === 'buff') {
+      this.buffs.set(def.buff.id, { def: def.buff, remaining: def.buff.duration });
+      this.recomputeMods();
+      this.fx.floaters.add(p.x, p.y - 16, def.name, { size: 12, color: '#2f5fa8', life: 0.9 });
+      return;
+    }
+    if (def.kind === 'pigment') {
+      const amount = (def.pigment ?? 0) + (this.mods.pigmentPerPickup ?? 0);
+      this.pigment += amount;
+      this.sfx.pigment();
+      this.fx.floaters.add(p.x, p.y - 16, `+${amount} pigment`, { size: 12, color: '#2f5fa8', life: 0.9 });
+      return;
+    }
+    if (def.kind === 'heal') {
+      if (this.player.hp < this.player.maxHp) {
+        this.player.hp += 1;
+        this.fx.floaters.add(p.x, p.y - 16, '+1', { size: 14, color: '#d9402b', life: 0.9 });
+      } else {
+        this.pigment += 2;
+        this.fx.floaters.add(p.x, p.y - 16, '+2 pigment', { size: 12, color: '#2f5fa8', life: 0.9 });
+      }
+    }
+  }
+
+  chooseTechnique(id: string): boolean {
+    const draft = this.draft;
+    if (!draft) return false;
+    const card = draft.cards.find((c) => c.id === id);
+    if (!card) return false;
+    this.techniques.set(id, (this.techniques.get(id) ?? 0) + 1);
+    this.recomputeMods();
+    this.draft = null;
+    this.mode = 'playing';
+    this.sfx.pick();
+    this.startWave(this.wave + 1);
+    return true;
+  }
+
+  rerollDraft(): boolean {
+    const draft = this.draft;
+    if (!draft) return false;
+    const cost = rerollCost(draft);
+    if (this.pigment < cost) return false;
+    this.pigment -= cost;
+    const next = drawDraft(this.techniqueDefs, this.wave, this.techniques, this.rng);
+    next.rerolls = draft.rerolls + 1;
+    this.draft = next;
+    this.sfx.pick();
+    return true;
+  }
+
+  skipDraft(): boolean {
+    if (!this.draft) return false;
+    this.pigment += DRAFT.skipPigment;
+    this.draft = null;
+    this.mode = 'playing';
+    this.sfx.pick();
+    this.startWave(this.wave + 1);
+    return true;
+  }
+
   // ---------------------------------------------------------------- simulation
 
   update(dt: number): void {
     if (this.mode !== 'playing' && this.mode !== 'dying') return;
     if (this.mode === 'playing') this.stats.time += dt;
     this.hintAlpha = Math.max(0, this.hintAlpha - (this.taught && this.wave >= 2 ? dt * 0.8 : 0));
+    if (this.mode === 'playing') {
+      this.tickBuffs(dt);
+      if (this.runMode === 'roguelike') this.updatePickups(dt);
+    }
 
     if (this.waveState === 'intro') {
       this.waveT -= dt;
@@ -343,13 +602,14 @@ export class Sim implements EnemyWorld, BladeWorld, PlayerWorld {
     this.blade.update(dt, this);
     for (const e of this.enemies) e.update(dt, this);
     this.separate();
+    if (this.mode === 'playing' && this.runMode === 'roguelike') this.collectPickups();
 
     for (const s of this.shots) {
       s.x += s.vx * dt;
       s.y += s.vy * dt;
       if (s.x < ARENA.x || s.x > ARENA.x + ARENA.w || s.y < ARENA.y || s.y > ARENA.y + ARENA.h) {
         s.dead = true;
-        this.ink.dot(s.x, s.y, 3, '#1d1b1a', 0.5);
+        this.ink.motion(s.x, s.y, 3, 0.5);
       }
     }
 
@@ -413,7 +673,7 @@ export class Sim implements EnemyWorld, BladeWorld, PlayerWorld {
         this.deathT -= realDt;
         if (this.deathT <= 0) this.finishRun();
       }
-    } else {
+    } else if (this.mode === 'over') {
       this.overT += realDt;
     }
   }

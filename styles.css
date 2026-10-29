@@ -80,6 +80,38 @@ canvas {
   display: none;
 }
 
+.mode-select {
+  position: fixed;
+  top: 52px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  z-index: 2;
+}
+
+.mode-select[hidden] {
+  display: none;
+}
+
+.mode-select button {
+  min-height: 34px;
+  padding: 0 18px;
+  border: 1.5px solid #1d1b1a;
+  background: #efe8da;
+  color: #1d1b1a;
+  font: bold 12px ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  cursor: pointer;
+}
+
+.mode-select button:hover,
+.mode-select button:focus-visible {
+  background: #d9402b;
+  color: #efe8da;
+  outline: 2px solid #1d1b1a;
+  outline-offset: 2px;
+}
+
 .touch-buttons {
   position: fixed;
   right: 18px;
@@ -173,4 +205,42 @@ dialog button:focus-visible {
   color: #efe8da;
   outline: 2px solid #1d1b1a;
   outline-offset: 2px;
+}
+
+dialog button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.draft-cards {
+  display: grid;
+  gap: 8px;
+  margin: 6px 0;
+}
+
+.draft-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-height: 0;
+  padding: 10px 12px;
+  text-align: left;
+}
+
+.draft-card strong {
+  font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  font-size: 18px;
+}
+
+.draft-meta {
+  color: #6b6252;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.draft-blurb {
+  font-size: 12px;
+  line-height: 1.35;
 }

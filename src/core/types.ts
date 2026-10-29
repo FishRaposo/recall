@@ -29,6 +29,85 @@ export interface EnemyDef {
 
 export type EnemyCatalog = Record<EnemyKind, EnemyDef>;
 
+export type RunMode = 'arcade' | 'roguelike';
+
+export type TechniqueTag = 'throw' | 'recall' | 'double' | 'move' | 'geometry' | 'enemy' | 'combo' | 'economy';
+export type Rarity = 'common' | 'rare' | 'epic';
+
+// Run-time modifiers. Percentages are additive fractions (+0.12 = +12%).
+export interface Mods {
+  throwSpeedPct?: number;
+  throwDecelPct?: number;
+  returnSpeedPct?: number;
+  returnAccelPct?: number;
+  steerPct?: number;
+  bladeRadiusPx?: number;
+  catchPadPx?: number;
+  bouncePct?: number;
+  doubleTapWindowS?: number;
+  doubleTapScore?: number;
+  returnDamage?: number;
+  moveSpeedPct?: number;
+  dashCooldownPct?: number;
+  dashCharges?: number;
+  knockbackPct?: number;
+  heavyDragPct?: number;
+  comboPerCatch?: number;
+  comboShield?: number;
+  scorePct?: number;
+  pigmentPerPickup?: number;
+  ignoreHeavyDrag?: boolean;
+  sunderHeavy?: boolean;
+}
+
+export interface TechniqueDef {
+  id: string;
+  name: string;
+  tag: TechniqueTag;
+  rarity: Rarity;
+  maxStacks: number;
+  minWave: number;
+  blurb: string;
+  mods: Mods;
+}
+
+export type PickupKind = 'buff' | 'pigment' | 'heal';
+
+export interface BuffDef {
+  id: string;
+  name: string;
+  duration: number;
+  mods: Mods;
+}
+
+export interface PickupDef {
+  id: string;
+  name: string;
+  note: string;
+  kind: PickupKind;
+  weight: number;
+  minWave: number;
+  lifetime: number;
+  color: string;
+  buff?: BuffDef;
+  pigment?: number;
+  heal?: number;
+  dashRefill?: boolean;
+}
+
+export interface PickupState {
+  def: PickupDef;
+  x: number;
+  y: number;
+  life: number;
+  maxLife: number;
+}
+
+export interface DraftState {
+  cards: TechniqueDef[];
+  rerolls: number;
+}
+
 export interface BurstOptions {
   count?: number;
   speed?: [number, number];
@@ -53,6 +132,12 @@ export interface InkLike {
   clear(): void;
   blot(x: number, y: number, r: number, color: string, dx?: number, dy?: number, alpha?: number): void;
   dot(x: number, y: number, r: number, color: string, alpha: number): void;
+  kill(x: number, y: number, r: number, dx?: number, dy?: number): void;
+  hurt(x: number, y: number, r: number, dx?: number, dy?: number): void;
+  death(x: number, y: number, r: number): void;
+  doubleTap(x1: number, y1: number, x2: number, y2: number): void;
+  pickup(x: number, y: number, kind: PickupKind): void;
+  motion(x: number, y: number, r: number, alpha: number): void;
 }
 
 export interface FloatersLike {
@@ -87,6 +172,12 @@ export interface SfxLike {
   clear(): void;
   heal(): void;
   gameOver(): void;
+  pickup(kind: PickupKind): void;
+  buffEnd(): void;
+  pigment(): void;
+  doubleTap(): void;
+  draft(): void;
+  pick(): void;
 }
 
 export interface PlayerLike {
@@ -100,6 +191,8 @@ export interface PlayerLike {
   invuln: number;
   dashT: number;
   dashCd: number;
+  dashCharges?: number;
+  dashChargesMax?: number;
   dashX: number;
   dashY: number;
   faceX: number;
@@ -119,6 +212,7 @@ export interface PlayerWorld {
   input: SimInput;
   ink: InkLike;
   blade?: BladeLike;
+  mods?: Mods;
   onDash(p: PlayerLike): void;
 }
 
@@ -143,12 +237,15 @@ export interface BladeLike {
   update(dt: number, world: BladeWorld): void;
   throw(world: BladeWorld): void;
   turnHome(world: BladeWorld, early: boolean): void;
+  registerHit(e: EnemyLike, x1: number, y1: number, x2: number, y2: number, world: BladeWorld): boolean;
   drag(): void;
   draw(ctx: CanvasRenderingContext2D): void;
 }
 
 export interface BladeWorld {
   input: SimInput;
+  mods?: Mods;
+  doubleTapWindow?: number;
   hasTargets(): boolean;
   onThrow(b: BladeLike): void;
   onRecall(b: BladeLike): void;
@@ -156,6 +253,7 @@ export interface BladeWorld {
   bladeSweep(b: BladeLike, x1: number, y1: number, x2: number, y2: number): void;
   onCatch(hits: number, hadTargets: boolean): void;
   onChargeFull?(b: BladeLike): void;
+  onDoubleTap?(e: EnemyLike, x1: number, y1: number, x2: number, y2: number): void;
 }
 
 export interface EnemyLike {
@@ -175,7 +273,7 @@ export interface EnemyLike {
   t: number;
   readonly active: boolean;
   update(dt: number, world: EnemyWorld): void;
-  hit(dx: number, dy: number, world: EnemyWorld): void;
+  hit(dx: number, dy: number, world: EnemyWorld, damage?: number): void;
   draw(ctx: CanvasRenderingContext2D): void;
 }
 
@@ -185,6 +283,7 @@ export interface EnemyWorld {
   blade?: BladeLike;
   ink: InkLike;
   sfx: SfxLike;
+  mods?: Mods;
   addEnemy(e: EnemyLike): void;
   spawnShot(x: number, y: number, vx: number, vy: number): void;
 }
@@ -222,6 +321,7 @@ export interface RunStats {
   kills: number;
   bestMult: number;
   time: number;
+  doubleTaps?: number;
 }
 
 export interface Best {
@@ -240,7 +340,7 @@ export interface SimCheckpoint {
   stats: RunStats;
 }
 
-export type SimMode = 'playing' | 'dying' | 'over';
+export type SimMode = 'playing' | 'draft' | 'dying' | 'over';
 export type WaveState = 'intro' | 'fight' | 'clear';
 
 export interface SpawnGroup {

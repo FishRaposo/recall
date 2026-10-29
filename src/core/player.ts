@@ -13,6 +13,8 @@ export class Player implements PlayerLike {
   invuln = 0;
   dashT = 0;
   dashCd = 0;
+  dashCharges = 1;
+  dashChargesMax = 1;
   dashX = 1;
   dashY = 0;
   faceX = 1;
@@ -41,6 +43,16 @@ export class Player implements PlayerLike {
     this.dashCd = Math.max(0, this.dashCd - dt);
     this.squash = expDecay(this.squash, 0, 10, dt);
 
+    const maxCharges = 1 + (g.mods?.dashCharges ?? 0);
+    this.dashChargesMax = maxCharges;
+    if (this.dashCharges > maxCharges) this.dashCharges = maxCharges;
+    if (this.dashCharges < maxCharges && this.dashCd <= 0) {
+      this.dashCharges += 1;
+      if (this.dashCharges < maxCharges) {
+        this.dashCd = PLAYER.dashCooldown * (1 + (g.mods?.dashCooldownPct ?? 0));
+      }
+    }
+
     if (!this.alive) {
       this.vx = expDecay(this.vx, 0, 5, dt);
       this.vy = expDecay(this.vy, 0, 5, dt);
@@ -48,15 +60,19 @@ export class Player implements PlayerLike {
       return;
     }
 
-    const [mx, my] = inp.moveVector();
+    let [mx, my] = inp.moveVector();
+    const moveScale = 1 + (g.mods?.moveSpeedPct ?? 0);
+    mx *= moveScale;
+    my *= moveScale;
     if (mx || my) [this.moveX, this.moveY] = norm(mx, my);
     [this.faceX, this.faceY] = inp.aimDir(this.x, this.y, this.moveX, this.moveY);
 
-    if (this.dashCd <= 0 && inp.consume('dash')) {
+    if (this.dashCharges > 0 && inp.consume('dash')) {
       // Dash goes where you're moving; standing still, it goes where you're aiming.
       [this.dashX, this.dashY] = mx || my ? norm(mx, my) : [this.faceX, this.faceY];
+      this.dashCharges -= 1;
       this.dashT = PLAYER.dashTime;
-      this.dashCd = PLAYER.dashCooldown;
+      this.dashCd = PLAYER.dashCooldown * (1 + (g.mods?.dashCooldownPct ?? 0));
       this.squash = 1;
       g.onDash(this);
     }
@@ -65,7 +81,7 @@ export class Player implements PlayerLike {
       this.dashT -= dt;
       this.vx = this.dashX * PLAYER.dashSpeed;
       this.vy = this.dashY * PLAYER.dashSpeed;
-      g.ink.dot(this.x, this.y, this.r * 0.55, COLORS.ink, 0.07); // dashes leave brushstrokes
+      g.ink.motion(this.x, this.y, this.r * 0.55, 0.07); // dashes leave faint brushstrokes
       if (this.dashT <= 0) {
         this.vx *= 0.35;
         this.vy *= 0.35;
@@ -106,6 +122,17 @@ export class Player implements PlayerLike {
       ctx.beginPath();
       ctx.arc(0, 0, this.r + 6, -Math.PI / 2, -Math.PI / 2 + TAU * (1 - this.dashCd / PLAYER.dashCooldown));
       ctx.stroke();
+    }
+
+    if (this.alive && this.dashChargesMax > 1) {
+      const gap = 8;
+      const start = -((this.dashChargesMax - 1) * gap) / 2;
+      for (let i = 0; i < this.dashChargesMax; i++) {
+        ctx.beginPath();
+        ctx.arc(start + i * gap, this.r + 10, 2.2, 0, TAU);
+        ctx.fillStyle = i < this.dashCharges ? COLORS.ink : 'rgba(29,27,26,0.2)';
+        ctx.fill();
+      }
     }
 
     const moveAng = Math.atan2(this.vy, this.vx);
