@@ -244,3 +244,9 @@ dialog button:disabled {
   font-size: 12px;
   line-height: 1.35;
 }
+
+/* Access floor: HUD, mode and dialog controls. */
+.hud-buttons button, #continue-btn, .mode-select button, dialog button { min-height:44px; }
+.draft-meta { font-size:12px; }
+dialog .row { font-size:14px; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important; } }
