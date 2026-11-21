@@ -57,10 +57,23 @@ await page.locator('dialog .actions button').last().click();
 
 await page.mouse.click(480, 300);
 await page.waitForFunction(() => window.__recall.state === 'playing', undefined, { timeout: 5000 });
+const focusAfterStart = await page.evaluate(() => document.activeElement?.id ?? '');
+if (focusAfterStart !== 'game') {
+  problems.push(`keyboard: focus after starting a run is #${focusAfterStart}, not the canvas — game keys are ignored on other elements`);
+}
 await page.keyboard.press('Escape');
-await page.waitForSelector('dialog[open]');
-await scan('pause dialog');
-await page.locator('dialog .actions button').first().click();
+let pauseOpened = true;
+try {
+  await page.waitForSelector('dialog[open]', { timeout: 5000 });
+} catch {
+  pauseOpened = false;
+  const state = await page.evaluate(() => window.__recall.state);
+  problems.push(`keyboard: Escape did not open the pause dialog (state "${state}", focus on #${focusAfterStart}) — the key was swallowed`);
+}
+if (pauseOpened) {
+  await scan('pause dialog');
+  await page.locator('dialog .actions button').first().click();
+}
 
 await page.evaluate(() => {
   const g = window.__recall;

@@ -104,9 +104,13 @@ export class Menus {
     for (const action of actions) bar.append(action);
     dialog.append(heading, content, bar);
     dialog.addEventListener('close', () => {
+      // 'close' fires as a queued task, so focus may already have moved on (a
+      // click on the canvas to start a run). Stealing it back would park focus
+      // on a button, where the input layer ignores every game key.
+      const focusInside = dialog.contains(document.activeElement) || document.activeElement === document.body;
       dialog.remove();
       this.dialog = null;
-      this.returnFocus?.focus();
+      if (focusInside) this.returnFocus?.focus();
       onClose?.();
     });
     if (onCancel) {
