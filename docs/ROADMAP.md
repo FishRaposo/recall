@@ -2,13 +2,13 @@
 
 ## Design document
 
-> **Status: implemented in the working tree, unreleased.** The semantic ink, double-tap, pickups, Roguelike mode, draft/techniques, run reset, mode select, painting titles, reveal, save and share are in `src/`. Release and public copy are pending.
+> **Status: shipped in v1.4.0 (2026-11-21).** The semantic ink, double-tap, pickups, Roguelike mode, draft/techniques, run reset, mode select, painting titles, the 1.4 s reveal and Web Share are all in `src/` and released. Everything below is the design record as written on 2026-10-28; read the release changelog for what actually shipped.
 >
 > **Prerequisite:** the TypeScript migration is complete and Recall is on v1.3.1. This design does **not** add persistence to the Roguelike mode; Arcade keeps its existing wave checkpoint and Continue.
 >
-> **Location:** `portfolio/games/recall/docs/ROADMAP.md`.
+> **Location:** `games/recall/docs/ROADMAP.md` (this file; it moved out of `portfolio/` with the game clones).
 >
-> **Last updated:** 2026-10-28
+> **Last updated:** 2026-10-28 (design); status line refreshed 2026-11-21.
 >
 > **Owner:** Fish
 
