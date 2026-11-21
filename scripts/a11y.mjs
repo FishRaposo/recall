@@ -35,6 +35,24 @@ await scan('title');
 await page.click('#settings-btn');
 await page.waitForSelector('dialog[open]');
 await scan('settings dialog');
+await page.locator('#recall-volume').focus();
+const volumeBefore = await page.locator('#recall-volume').inputValue();
+await page.keyboard.press('ArrowRight');
+const volumeAfter = await page.locator('#recall-volume').inputValue();
+if (volumeBefore === volumeAfter) {
+  problems.push('keyboard: ArrowRight does not move the settings volume slider');
+}
+await page.keyboard.press('Tab');
+const focusAfterTab = await page.evaluate(() => document.activeElement?.id ?? '');
+if (focusAfterTab === 'recall-volume') {
+  problems.push('keyboard: Tab does not move focus inside the settings dialog');
+}
+await page.keyboard.press('Space');
+const mutedAfterSpace = await page.locator('#recall-mute').isChecked();
+if (!mutedAfterSpace) {
+  problems.push('keyboard: Space does not toggle the settings mute checkbox');
+}
+await page.keyboard.press('Space');
 await page.locator('dialog .actions button').last().click();
 
 await page.mouse.click(480, 300);

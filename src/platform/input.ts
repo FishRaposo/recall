@@ -5,7 +5,8 @@ import type { SimInput, Vec } from '../core/types.ts';
 const THROW_KEYS = new Set(['Space', 'KeyJ', 'KeyZ']);
 const DASH_KEYS = new Set(['ShiftLeft', 'ShiftRight', 'KeyK', 'KeyX']);
 const ARROWS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
-const BLOCK_DEFAULT = new Set([...THROW_KEYS, ...ARROWS, 'Tab']);
+const BLOCK_DEFAULT = new Set([...THROW_KEYS, ...ARROWS]);
+const INTERACTIVE = 'button, a, input, select, textarea, summary';
 
 const deadzone = (v: number): number => (Math.abs(v) < 0.22 ? 0 : v);
 
@@ -44,7 +45,10 @@ export class Input implements SimInput {
     this.view = view;
 
     addEventListener('keydown', (e) => {
-      if (BLOCK_DEFAULT.has(e.code)) e.preventDefault();
+      const target = e.target as HTMLElement | null;
+      const interactive = !!target?.closest?.(INTERACTIVE);
+      if (!interactive && BLOCK_DEFAULT.has(e.code)) e.preventDefault();
+      if (interactive) return;
       this.down.add(e.code);
       if (e.repeat) return;
       this.pressed.add(e.code);
