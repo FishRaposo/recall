@@ -13,6 +13,10 @@ canvas {
   outline: none;
   touch-action: none;
 }
+canvas:focus-visible {
+  outline: 3px solid #d9402b;
+  outline-offset: -3px;
+}
 
 .sr-only {
   position: absolute;
