@@ -65,3 +65,33 @@ test('a wave checkpoint round-trips and invalid saves are discarded', () => {
   storage.setItem('recall.save.v1', '{');
   assert.equal(loadSave(), null);
 });
+
+test('blocked storage plays on without persistence', () => {
+  const boom = (): never => {
+    throw new Error('SecurityError: storage is blocked');
+  };
+  (globalThis as { localStorage: Storage }).localStorage = {
+    get length(): number { return boom(); },
+    clear: boom,
+    getItem: boom,
+    key: boom,
+    removeItem: boom,
+    setItem: boom,
+  } as unknown as Storage;
+
+  assert.deepEqual(loadBest(), { score: 0, wave: 0 });
+  assert.equal(loadSave(), null);
+  assert.equal(loadSettings().version, 1);
+  assert.doesNotThrow(() => saveBest({ score: 10, wave: 2 }));
+  assert.doesNotThrow(() => saveRun({
+    version: 1, seed: 1, rngState: 1, wave: 1, score: 0, combo: 0, hp: 3,
+    stats: { kills: 0, bestMult: 1, time: 0 },
+  }));
+  assert.doesNotThrow(() => clearRunSave());
+  assert.doesNotThrow(() => saveSettings(defaultSettings()));
+
+  delete (globalThis as { localStorage?: Storage }).localStorage;
+  assert.deepEqual(loadBest(), { score: 0, wave: 0 });
+  assert.equal(loadSave(), null);
+  assert.equal(loadSettings().version, 1);
+});
