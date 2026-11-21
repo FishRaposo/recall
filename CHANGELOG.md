@@ -2,7 +2,7 @@
 
 All notable changes to Recall are recorded here. The format follows Keep a Changelog; versions follow SemVer.
 
-## [Unreleased]
+## [1.4.0] — 2026-11-21
 
 ### Added
 
@@ -21,8 +21,12 @@ All notable changes to Recall are recorded here. The format follows Keep a Chang
 
 ### Tests
 
-- 42 unit tests: the existing suite plus double-tap window, pickups, buff expiry, draft determinism/rerolls/skip, run reset and painting titles.
+- 43 unit tests: the existing suite plus double-tap window, pickups, buff expiry, draft determinism/rerolls/skip, run reset and painting titles.
 - Smoke journeys include a Roguelike draft/pickup path in Chromium, Firefox and WebKit; the axe scan includes the draft dialog.
+
+### Fixed
+
+- Closing a menu no longer steals focus from the canvas. The dialog `close` handler ran as a queued task and pulled focus back to the invoking button after the player had already clicked into the game; the input layer ignores game keys on interactive elements, so every control went dead. Focus is now restored only when it is still inside the dialog. The a11y gate asserts it.
 
 ## [1.3.1] — 2026-10-28
 
